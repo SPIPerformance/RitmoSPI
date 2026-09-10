@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ritmo Funil — SPI Diretoria</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
+  :root{
+    --bg:#0E1826;
+    --surface:#152438;
+    --surface2:#16253A;
+    --card:#132132;
+    --border:#28405C;
+    --border-soft:#1E3350;
+    --text:#E9EFF7;
+    --muted:#8FA3BF;
+    --muted2:#5F7793;
+    --teal:#008E5C;
+    --teal-dim:#0B3D2C;
+    --amber:#F26E20;
+    --amber-dim:#4A2A12;
+    --lead:#5EA8FF;
+    --doc:#8B7CF6;
+    --cpf:#008E5C;
+    --vendas:#F26E20;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'IBM Plex Sans', -apple-system, Segoe UI, sans-serif;
+    min-height:100vh;
+  }
+  h1,h2,h3,.display{
+    font-family:'Space Grotesk', sans-serif;
+    letter-spacing:-0.01em;
+  }
+
+  /* ---------- Header ---------- */
+  header{
+    padding:28px 32px 20px;
+    border-bottom:1px solid var(--border-soft);
+    background:linear-gradient(180deg, rgba(0,142,92,0.08), transparent 70%);
+  }
+  .header-row{
+    display:flex; align-items:flex-end; justify-content:space-between; flex-wrap:wrap; gap:20px;
+  }
+  .brand{display:flex; flex-direction:column; gap:4px;}
+  .brand .eyebrow{color:var(--teal); font-size:13px; font-weight:600;}
+  .brand h1{font-size:26px; margin:0; font-weight:700;}
+  .brand p{color:var(--muted); margin:0; font-size:14px; max-width:520px; line-height:1.5;}
+
+  .upload-box{
+    display:flex; align-items:center; gap:14px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:12px 16px;
+  }
+  .upload-box .status-dot{
+    width:9px; height:9px; border-radius:50%;
+    background:var(--muted2); flex-shrink:0;
+  }
+  .upload-box.ok .status-dot{background:var(--teal); box-shadow:0 0 8px var(--teal);}
+  .upload-box.err .status-dot{background:#E5707A; box-shadow:0 0 8px #E5707A;}
+  .upload-box .status-text{font-size:13px; color:var(--muted); line-height:1.4;}
+  .upload-box .status-text strong{color:var(--text); font-weight:600;}
+  .btn{
+    background:var(--teal); color:#08221F; border:none; border-radius:8px;
+    padding:10px 16px; font-weight:600; font-size:13.5px; cursor:pointer;
+    font-family:inherit; white-space:nowrap; transition:transform .12s ease, opacity .12s ease;
+  }
+  .btn:hover{opacity:.9;}
+  .btn:active{transform:scale(.97);}
+  input[type=file]{display:none;}
+
+  /* ---------- Tabs ---------- */
+  nav.tabs{
+    display:flex; gap:6px; padding:16px 32px 0; flex-wrap:wrap;
+    border-bottom:1px solid var(--border-soft);
+  }
+  nav.tabs button{
+    background:transparent; border:none; color:var(--muted);
+    font-family:'IBM Plex Sans'; font-size:13.5px; font-weight:500;
+    padding:10px 16px; border-radius:8px 8px 0 0; cursor:pointer;
+    border-bottom:2px solid transparent; margin-bottom:-1px;
+  }
+  nav.tabs button:hover{color:var(--text);}
+  nav.tabs button.active{
+    color:var(--text); border-bottom:2px solid var(--teal); background:var(--surface2);
+  }
+
+  main{padding:28px 32px 60px;}
+  .empty-state{
+    max-width:520px; margin:60px auto; text-align:center; color:var(--muted);
+  }
+  .empty-state .icon{font-size:38px; margin-bottom:14px;}
+  .empty-state h2{color:var(--text); font-size:19px; margin:0 0 8px;}
+  .empty-state p{font-size:14px; line-height:1.6; margin:0 0 20px;}
+
+  /* ---------- Funnel flow strip ---------- */
+  .flow{
+    display:flex; align-items:center; gap:8px; margin:4px 0 22px; flex-wrap:wrap;
+  }
+  .flow .stage{
+    display:flex; align-items:center; gap:8px;
+    padding:7px 14px; border-radius:999px; font-size:12.5px; font-weight:600;
+    border:1px solid var(--border);
+    background:var(--card);
+  }
+  .flow .stage .dot{width:8px; height:8px; border-radius:50%;}
+  .flow .arrow{color:var(--muted2); font-size:14px;}
+
+  .block-title{display:flex; align-items:baseline; gap:12px; margin-bottom:4px; flex-wrap:wrap;}
+  .block-title h2{font-size:20px; margin:0;}
+  .block-title .sub{color:var(--muted); font-size:13px;}
+
+  .panel{
+    background:var(--surface2);
+    border:1px solid var(--border-soft);
+    border-radius:14px;
+    padding:20px 20px 6px;
+    margin-bottom:26px;
+    overflow-x:auto;
+  }
+  .panel h3{
+    font-size:14px; margin:0 0 14px; color:var(--muted); text-transform:none;
+    display:flex; align-items:center; gap:8px;
+  }
+  .panel h3 .tag{
+    font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:5px;
+    background:var(--teal-dim); color:var(--teal); letter-spacing:.02em;
+  }
+  .panel.ritmo h3 .tag{background:var(--amber-dim); color:var(--amber);}
+  .scroll-hint{display:none; color:var(--muted2); font-size:11px; margin:-8px 0 10px;}
+
+  table{border-collapse:collapse; width:100%; min-width:900px; font-size:13px;}
+  table.data-table th, table.data-table td{
+    padding:8px 10px; text-align:center; white-space:nowrap;
+    border:1px solid var(--border);
+  }
+  table.data-table th{font-weight:600; color:var(--muted); font-size:11.5px;}
+  table.data-table td.rowlabel, table.data-table th.rowlabel{
+    text-align:center; color:var(--text); font-weight:500; position:sticky; left:0;
+    background:var(--surface2);
+  }
+  .stage-head{
+    font-size:11px; letter-spacing:.03em; padding-bottom:6px;
+  }
+  .stage-head.lead{color:var(--lead);}
+  .stage-head.doc{color:var(--doc);}
+  .stage-head.cpf{color:var(--cpf);}
+  .stage-head.vendas{color:var(--vendas);}
+  tr.month-row th{border-bottom:1px solid var(--border-soft); font-weight:500; color:var(--muted2);}
+  tr.total-row td, tr.total-row th{border-top:1px solid var(--border); font-weight:700; color:var(--text);}
+  td.current-col, th.current-col{background:rgba(242,110,32,0.09);}
+  td.na{color:var(--muted2);}
+  tbody tr:hover td{background:rgba(255,255,255,0.02);}
+  tbody tr:hover td.current-col{background:rgba(242,110,32,0.14);}
+
+  /* ---------- Month comparison controls ---------- */
+  .month-controls{
+    display:flex; align-items:center; gap:18px; flex-wrap:wrap;
+    background:var(--card); border:1px solid var(--border); border-radius:12px;
+    padding:12px 18px; margin-bottom:20px;
+  }
+  .month-controls .mc-label{font-size:12.5px; color:var(--muted); font-weight:600; white-space:nowrap;}
+  .mc-item{display:flex; flex-direction:column; gap:4px;}
+  .mc-item label{font-size:10.5px; color:var(--muted2); text-transform:uppercase; letter-spacing:.04em;}
+  .mc-item select{
+    background:var(--surface2); color:var(--text); border:1px solid var(--border);
+    border-radius:7px; padding:6px 10px; font-family:inherit; font-size:12.5px; cursor:pointer;
+  }
+  .mc-item.fixed .mc-fixed{
+    background:rgba(242,110,32,0.12); color:var(--amber); border:1px solid var(--amber-dim);
+    border-radius:7px; padding:6px 10px; font-size:12.5px; font-weight:600;
+  }
+
+  .btn-outline{
+    background:transparent; color:var(--teal); border:1px solid var(--teal-dim);
+    border-radius:8px; padding:10px 16px; font-weight:600; font-size:13px; cursor:pointer;
+    font-family:inherit;
+  }
+  .btn-outline:hover{background:rgba(0,142,92,0.1);}
+
+  /* ---------- City drill-down ---------- */
+  .city-tabs{
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:14px;
+  }
+  .city-tabs .mc-label{font-size:12.5px; color:var(--muted); font-weight:600; white-space:nowrap;}
+  .city-tab{
+    background:var(--card); color:var(--muted); border:1px solid var(--border);
+    border-radius:999px; padding:6px 14px; font-size:12.5px; font-family:inherit;
+    cursor:pointer;
+  }
+  .city-tab:hover{color:var(--text); border-color:var(--muted2);}
+  .city-tab.active{
+    background:rgba(0,142,92,0.14); color:var(--teal); border-color:var(--teal-dim); font-weight:600;
+  }
+  .city-note{
+    color:var(--muted); font-size:12.5px; line-height:1.6;
+    background:var(--card); border:1px dashed var(--border); border-radius:10px;
+    padding:12px 14px; margin-bottom:18px;
+  }
+
+  /* ---------- Projection panel ---------- */
+  .proj-panel{
+    background:var(--surface2);
+    border:1px solid var(--amber-dim);
+    border-radius:14px;
+    padding:20px; margin-bottom:26px;
+  }
+  .proj-panel .proj-head{display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:6px;}
+  .proj-panel h3{margin:0; font-size:15px; color:var(--amber);}
+  .proj-panel .proj-note{color:var(--muted); font-size:12.5px; line-height:1.6; margin:0 0 16px;}
+  table.proj-table{width:100%; border-collapse:collapse; font-size:13px;}
+  table.proj-table th, table.proj-table td{
+    border:1px solid var(--border); padding:8px 10px; text-align:center;
+  }
+  table.proj-table th{color:var(--muted); font-weight:600; font-size:11px;}
+  table.proj-table td.rowlabel{text-align:center; font-weight:600;}
+  table.proj-table td.up{color:var(--teal);}
+  table.proj-table td.down{color:#E5707A;}
+
+  footer{padding:20px 32px 40px; color:var(--muted2); font-size:12px;}
+
+  /* ---------- Mobile ---------- */
+  @media (max-width: 720px){
+    header{padding:18px 16px 14px;}
+    .header-row{align-items:stretch;}
+    .brand h1{font-size:21px;}
+    .brand p{font-size:12.5px; max-width:none;}
+    .upload-box{width:100%; flex-wrap:wrap; padding:10px 12px;}
+    .upload-box .status-text{flex:1 1 100%; order:3; font-size:12px;}
+    .upload-box label.btn{flex:1; text-align:center;}
+
+    nav.tabs{
+      padding:10px 12px 0; flex-wrap:nowrap; overflow-x:auto; gap:4px;
+      -webkit-overflow-scrolling:touch; scrollbar-width:none;
+    }
+    nav.tabs::-webkit-scrollbar{display:none;}
+    nav.tabs button{padding:9px 12px; font-size:12.5px; flex:0 0 auto;}
+
+    main{padding:16px 12px 40px;}
+
+    .flow{gap:5px; margin-bottom:16px;}
+    .flow .stage{padding:5px 10px; font-size:11px; gap:5px;}
+    .flow .arrow{display:none;}
+
+    .block-title{gap:8px;}
+    .block-title h2{font-size:17px;}
+    .block-title #projBtn{width:100%; order:3;}
+
+    .month-controls{padding:10px 12px; gap:10px;}
+    .month-controls .mc-label{flex:1 1 100%;}
+    .mc-item{flex:1 1 calc(50% - 10px); min-width:120px;}
+    .mc-item select{width:100%;}
+    .city-tab{padding:5px 11px; font-size:11.5px;}
+
+    .panel{padding:14px 12px 4px; border-radius:12px; margin-bottom:18px;}
+    .panel h3{font-size:12.5px; flex-wrap:wrap;}
+    .scroll-hint{display:block;}
+
+    table{min-width:760px; font-size:11.5px;}
+    table.data-table th, table.data-table td{padding:6px 7px;}
+    table.data-table td.rowlabel, table.data-table th.rowlabel{
+      box-shadow:2px 0 4px rgba(0,0,0,0.25);
+    }
+
+    .proj-panel{padding:14px;}
+    table.proj-table{font-size:11.5px;}
+    table.proj-table th, table.proj-table td{padding:6px 7px;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-row">
+    <div class="brand">
+      <span class="eyebrow">RITMO SPI</span>
+      <h1>Funil — Diretoria</h1>
+      <p>Compara os números absolutos do funil e o ritmo diário de cada etapa, semana a semana — com meses de comparação ajustáveis e projeção de fechamento do mês.</p>
+    </div>
+    <div id="uploadBox" class="upload-box">
+      <div class="status-dot"></div>
+      <div class="status-text" id="statusText">Aguardando...</div>
+      <label class="btn" for="fileInput">Carregar base manual (.xlsx)</label>
+      <input type="file" id="fileInput" accept=".xlsx,.xlsm">
+    </div>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs"></nav>
+
+<main id="app">
+  <div class="empty-state">
+    <div class="icon">📊</div>
+    <h2>Carregando a base de dados...</h2>
+    <p>Buscando o arquivo Excel do repositório. Por favor, aguarde.</p>
+  </div>
+</main>
+
+<footer>Lê apenas as abas <em>Coletafunil</em> e <em>divsemana</em> do arquivo. O cálculo acontece inteiramente no seu navegador.</footer>
+
+<script>
+// ==========================================
+// CONFIGURAÇÃO DO ARQUIVO NO GITHUB
+// ==========================================
+const NOME_PLANILHA = 'base.xlsx'; // Mude aqui se o nome da planilha for diferente no repositório
+
+const MESES_PT = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+const MES_ABREV = {jan:1,fev:2,mar:3,abr:4,mai:5,jun:6,jul:7,ago:8,set:9,out:10,nov:11,dez:12};
+const WEEKDAYS_PT = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+
+const STAGES = [
+  {key:'lead',   label:'LEAD',                 cls:'lead'},
+  {key:'doc',    label:'DOCUMENTAÇÃO ENVIADA',  cls:'doc'},
+  {key:'cpf',    label:'CPF APROVADO',          cls:'cpf'},
+  {key:'vendas', label:'VENDAS',                cls:'vendas'},
+];
+
+const BLOCKS = [
+  {key:'total',  title:'Funil SPI — Total Geral', group:null},
+  {key:'spi1',   title:'SPI 1',       group:'SPI 1'},
+  {key:'spi2',   title:'SPI 2',       group:'SPI 2'},
+  {key:'spi3',   title:'SPI 3',       group:'SPI 3'},
+  {key:'spi4',   title:'SPI 4',       group:'SPI 4'},
+  {key:'spi5',   title:'SPI 5',       group:'SPI 5'},
+  {key:'spi6',   title:'SPI 6',       group:'SPI 6'},
+  {key:'sensia', title:'Sensia SPI',  group:'SENSIA SPI'},
+];
+
+const REGIONAL_CITIES = {
+  spi1: ['CAMPINAS','PAULÍNIA'],
+  spi2: ['RIBEIRÃO PRETO','FRANCA'],
+  spi3: ['PIRACICABA','LIMEIRA','SÃO CARLOS',"SANTA BÁRBARA D'OESTE",'AMERICANA'],
+  spi4: ['PRESIDENTE PRUDENTE','BOTUCATU','BAURU','MARÍLIA','ARARAQUARA'],
+  spi5: ['SÃO JOSÉ DO RIO PRETO','ARAÇATUBA'],
+  spi6: ['SOROCABA','JUNDIAÍ','VOTORANTIM','ITÚ','ARARAS','SALTO'],
+};
+
+let STATE = null; 
+let activeBlock = 'total';
+let activeCity = null;
+
+const fileInput = document.getElementById('fileInput');
+const uploadBox = document.getElementById('uploadBox');
+const statusText = document.getElementById('statusText');
+const tabsEl = document.getElementById('tabs');
+const app = document.getElementById('app');
+
+// ==========================================
+// FUNÇÃO PARA BUSCAR O EXCEL DO GITHUB
+// ==========================================
+async function carregarBaseDoRepositorio() {
+  setStatus(null, 'Baixando <strong>' + NOME_PLANILHA + '</strong> do repositório...');
+  try {
+    // Adicionamos um timestamp (cache busting) para evitar que o navegador guarde uma versão velha em cache
+    const response = await fetch(NOME_PLANILHA + '?t=' + new Date().getTime());
+    
+    if (!response.ok) {
+      throw new Error('Arquivo não encontrado no repositório.');
+    }
+    
+    const arrayBuffer = await response.arrayBuffer();
+    const wb = XLSX.read(new Uint8Array(arrayBuffer), {type:'array', cellDates:true});
+    processWorkbook(wb, NOME_PLANILHA);
+
+  } catch(err) {
+    console.error(err);
+    setStatus('err', 'Falha ao buscar a planilha automática. Verifique se o arquivo <strong>' + NOME_PLANILHA + '</strong> existe no repositório.');
+  }
+}
+
+// Inicia o carregamento automático assim que a tela abre
+window.addEventListener('DOMContentLoaded', carregarBaseDoRepositorio);
+
+// Mantém a opção de upload manual como um plano B
+fileInput.addEventListener('change', (e)=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  handleFile(f);
+});
+
+function setStatus(kind, html){
+  uploadBox.classList.remove('ok','err');
+  if(kind) uploadBox.classList.add(kind);
+  statusText.innerHTML = html;
+}
+
+function handleFile(file){
+  setStatus(null, 'Lendo <strong>'+escapeHtml(file.name)+'</strong>…');
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    try{
+      const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array', cellDates:true});
+      processWorkbook(wb, file.name);
+    }catch(err){
+      console.error(err);
+      setStatus('err', 'Não consegui ler esse arquivo. Verifique se é o Excel correto (.xlsx) e tente de novo.');
+    }
+  };
+  reader.onerror = function(){
+    setStatus('err', 'Falha ao abrir o arquivo.');
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function sheetToAOA(wb, name){
+  const ws = wb.Sheets[name];
+  if(!ws) return null;
+  return XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
+}
+
+function normStr(v){
+  return (v===null || v===undefined) ? '' : String(v).trim();
+}
+
+function ymFromDate(d){
+  return {y:d.getFullYear(), m:d.getMonth()+1};
+}
+function parseDDMMYYYY(val){
+  if(val===null || val===undefined) return null;
+  if(val instanceof Date) return ymFromDate(val);
+  const s = String(val).trim();
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(m) return {y:parseInt(m[3],10), m:parseInt(m[2],10)};
+  return null;
+}
+function parsePtMonthYear(val){
+  if(val===null || val===undefined) return null;
+  if(val instanceof Date) return ymFromDate(val);
+  const s = String(val).trim().toLowerCase();
+  const m = s.match(/^([a-zç]{3})\/(\d{4})$/);
+  if(m && MES_ABREV[m[1]]) return {y:parseInt(m[2],10), m:MES_ABREV[m[1]]};
+  return null;
+}
+function weekNum(val){
+  const s = normStr(val).toUpperCase();
+  const m = s.match(/SEMANA\s*(\d)/);
+  if(m) return parseInt(m[1],10);
+  return null;
+}
+function num(v){
+  const n = Number(v);
+  return isFinite(n) ? n : 0;
+}
+
+function buildMonthLookup(aoa){
+  const order = ['mês -3','mês -2','mês -1','mês atual'];
+  const found = {};
+  for(let r=0; r<Math.min(aoa.length,8); r++){
+    const row = aoa[r] || [];
+    const label = normStr(row[4]).toLowerCase();
+    if(!label) continue;
+    const name = normStr(row[5]);
+    const dateVal = row[6];
+    let ym = null;
+    if(dateVal instanceof Date) ym = ymFromDate(dateVal);
+    if(label && name){
+      found[label] = {name, y: ym ? ym.y : null, m: ym ? ym.m : null};
+    }
+  }
+  const months = order.map(lbl=>found[lbl]).filter(Boolean);
+  return months.length===4 ? months : null;
+}
+
+function buildSegmentGroups(aoa){
+  const groups = {};
+  for(let r=1; r<aoa.length; r++){
+    const row = aoa[r] || [];
+    const g = normStr(row[6]); 
+    const d = normStr(row[3]); 
+    if(!g || !d) continue;
+    if(!groups[g]) groups[g] = [];
+    if(!groups[g].includes(d)) groups[g].push(d);
+  }
+  return groups;
+}
+
+function findCityColumn(headerRowArr){
+  for(let c=0; c<headerRowArr.length; c++){
+    if(/cidade/i.test(normStr(headerRowArr[c]))) return c;
+  }
+  return -1;
+}
+
+function findColExact(headerRowArr, text){
+  const target = text.trim().toLowerCase();
+  for(let c=0; c<headerRowArr.length; c++){
+    if(normStr(headerRowArr[c]).toLowerCase()===target) return c;
+  }
+  return -1;
+}
+function findColMatch(headerRowArr, regex){
+  for(let c=0; c<headerRowArr.length; c++){
+    if(regex.test(normStr(headerRowArr[c]))) return c;
+  }
+  return -1;
+}
+
+function findWeekColumnByData(aoa, headerRow, sampleRows){
+  const counts = {};
+  const limit = Math.min(aoa.length, headerRow+1+(sampleRows||400));
+  for(let r=headerRow+1; r<limit; r++){
+    const row = aoa[r] || [];
+    for(let c=0; c<row.length; c++){
+      if(/^SEMANA\s*\d\s*$/i.test(normStr(row[c]))) counts[c] = (counts[c]||0)+1;
+    }
+  }
+  let best=-1, bestCount=0;
+  for(const c in counts){ if(counts[c]>bestCount){ bestCount=counts[c]; best=parseInt(c,10); } }
+  return bestCount>0 ? best : -1;
+}
+function findWeekColumn(headerRowArr, aoa, headerRow){
+  const byText = findColExact(headerRowArr, 'semana');
+  if(byText>=0) return byText;
+  return findWeekColumnByData(aoa, headerRow);
+}
+
+function parseFunilRows(aoa){
+  let headerRow = -1;
+  for(let r=0;r<aoa.length;r++){
+    const row = aoa[r] || [];
+    const hasLead = row.some(c=>normStr(c).toUpperCase()==='LEAD');
+    const hasRegional = row.some(c=>normStr(c).toLowerCase()==='regional');
+    if(hasLead && hasRegional){ headerRow = r; break; }
+  }
+  if(headerRow===-1) return [];
+  const header = aoa[headerRow] || [];
+
+  const regionalCol = findColExact(header, 'regional');
+  const cityCol = findCityColumn(header);
+  const diaCol = findColExact(header, 'dia');
+  const dataBaseCol = findColMatch(header, /data.?base/i);
+  const leadCol = findColMatch(header, /^lead$/i);
+  const docCol = findColMatch(header, /documenta.*enviada/i);
+  let cpfCol = findColExact(header, 'CPF APROVADO');
+  if(cpfCol<0) cpfCol = findColExact(header, 'CPF: COND. PEND.|APRV. PEND.|COND.|APRV.');
+  if(cpfCol<0) cpfCol = findColMatch(header, /cpf.*(aprv|aprovad)/i);
+  const weekCol = findWeekColumn(header, aoa, headerRow);
+
+  if(regionalCol<0 || leadCol<0 || dataBaseCol<0 || weekCol<0) return [];
+
+  const rows = [];
+  for(let r=headerRow+1; r<aoa.length; r++){
+    const row = aoa[r] || [];
+    if(row[leadCol]===null && (docCol<0 || row[docCol]===null) && (cpfCol<0 || row[cpfCol]===null)) continue;
+    const dayVal = diaCol>=0 ? parseInt(normStr(row[diaCol]),10) : NaN;
+    rows.push({
+      segment: normStr(row[regionalCol]),
+      ym: parseDDMMYYYY(row[dataBaseCol]),
+      day: isFinite(dayVal) ? dayVal : null,
+      city: cityCol>=0 ? (normStr(row[cityCol]) || null) : null,
+      lead: num(row[leadCol]),
+      doc: docCol>=0 ? num(row[docCol]) : 0,
+      cpf: cpfCol>=0 ? num(row[cpfCol]) : 0,
+      week: weekNum(row[weekCol]),
+    });
+  }
+  rows.__cpfLabel = cpfCol>=0 ? normStr(header[cpfCol]) : null;
+  rows.__cityFound = cityCol>=0;
+  return rows;
+}
+
+function parseVendasRows(aoa){
+  let headerRow = -1;
+  for(let r=0;r<aoa.length;r++){
+    const row = aoa[r] || [];
+    if(row.some(c=>normStr(c)==='IdOportunidade')){ headerRow = r; break; }
+  }
+  if(headerRow===-1) return [];
+  const header = aoa[headerRow] || [];
+
+  const segCol = findColExact(header, 'RegionalComercial');
+  const cityCol = findCityColumn(header);
+  let dataCol = findColMatch(header, /DataBaseAssinaturaContratoSalesforce/i);
+  if(dataCol<0) dataCol = findColMatch(header, /assinaturacontrato/i);
+  let vendasCol = findColExact(header, '# Vendas');
+  if(vendasCol<0) vendasCol = findColMatch(header, /vendas/i);
+  const diaCol = findColExact(header, 'Dia');
+  const weekCol = findWeekColumn(header, aoa, headerRow);
+
+  if(segCol<0 || dataCol<0 || vendasCol<0 || weekCol<0) return [];
+
+  const rows = [];
+  for(let r=headerRow+1; r<aoa.length; r++){
+    const row = aoa[r] || [];
+    if(row[vendasCol]===null) continue;
+    const dayVal = diaCol>=0 ? parseInt(normStr(row[diaCol]),10) : NaN;
+    rows.push({
+      segment: normStr(row[segCol]),
+      ym: parsePtMonthYear(row[dataCol]),
+      day: isFinite(dayVal) ? dayVal : null,
+      city: cityCol>=0 ? (normStr(row[cityCol]) || null) : null,
+      vendas: num(row[vendasCol]),
+      week: weekNum(row[weekCol]),
+    });
+  }
+  rows.__cityFound = cityCol>=0;
+  return rows;
+}
+
+function emptyMonthBucket(){
+  const b = {};
+  for(let w=1; w<=5; w++) b[w] = {lead:0, doc:0, cpf:0, vendas:0};
+  return b;
+}
+function aggregateBlock(funilRows, vendasRows, months, codes, cityFilter){
+  cityFilter = cityFilter || null;
+  const data = {};
+  for(let mi=0; mi<4; mi++) data[mi] = emptyMonthBucket();
+
+  const matchSeg = (seg)=> codes===null || codes.includes(seg);
+  const matchCity = (city)=> cityFilter===null || normCity(city)===normCity(cityFilter);
+
+  for(const r of funilRows){
+    if(!r.ym || !r.week) continue;
+    if(!matchSeg(r.segment) || !matchCity(r.city)) continue;
+    const mi = months.findIndex(mo=>mo.y===r.ym.y && mo.m===r.ym.m);
+    if(mi===-1) continue;
+    const bucket = data[mi][r.week];
+    if(!bucket) continue;
+    bucket.lead += r.lead;
+    bucket.doc  += r.doc;
+    bucket.cpf  += r.cpf;
+  }
+  for(const r of vendasRows){
+    if(!r.ym || !r.week) continue;
+    if(!matchSeg(r.segment) || !matchCity(r.city)) continue;
+    const mi = months.findIndex(mo=>mo.y===r.ym.y && mo.m===r.ym.m);
+    if(mi===-1) continue;
+    const bucket = data[mi][r.week];
+    if(!bucket) continue;
+    bucket.vendas += r.vendas;
+  }
+  return data;
+}
+
+function normCity(s){
+  return (s||'').trim().toUpperCase();
+}
+function buildCityList(funilRows, vendasRows, codes){
+  const matchSeg = (seg)=> codes===null || codes.includes(seg);
+  const set = new Set();
+  for(const r of funilRows){ if(r.city && matchSeg(r.segment)) set.add(r.city); }
+  for(const r of vendasRows){ if(r.city && matchSeg(r.segment)) set.add(r.city); }
+  return Array.from(set).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+}
+
+function resolveCityList(blockKey, funilRows, vendasRows, codes){
+  const official = REGIONAL_CITIES[blockKey] || [];
+  const dataCities = buildCityList(funilRows, vendasRows, codes);
+  const officialSet = new Set(official.map(normCity));
+  const extra = dataCities.filter(c => !officialSet.has(normCity(c)));
+  return official.concat(extra);
+}
+
+function computeProjection(blockKey, cityFilter){
+  cityFilter = cityFilter || null;
+  const codes = STATE.blockCodes[blockKey];
+  const cur = STATE.months[3];
+  const dim = daysInMonth(cur.y, cur.m);
+  const asOfDay = Math.min(STATE.day, dim);
+  const compareMonths = STATE.months.slice(0,3).filter(mo=>mo.y!=null);
+  const stagesKeys = ['lead','doc','cpf','vendas'];
+  const matchSeg = seg => codes===null || codes.includes(seg);
+  const matchCity = (city)=> cityFilter===null || normCity(city)===normCity(cityFilter);
+
+  const actualToDate = {lead:0,doc:0,cpf:0,vendas:0};
+  for(const r of STATE.funilRows){
+    if(!r.ym || !r.day || !matchSeg(r.segment) || !matchCity(r.city)) continue;
+    if(r.ym.y===cur.y && r.ym.m===cur.m && r.day<=asOfDay){
+      actualToDate.lead += r.lead; actualToDate.doc += r.doc; actualToDate.cpf += r.cpf;
+    }
+  }
+  for(const r of STATE.vendasRows){
+    if(!r.ym || !r.day || !matchSeg(r.segment) || !matchCity(r.city)) continue;
+    if(r.ym.y===cur.y && r.ym.m===cur.m && r.day<=asOfDay){
+      actualToDate.vendas += r.vendas;
+    }
+  }
+
+  const wdLeadSum = [0,0,0,0,0,0,0];
+  const wdCount = [0,0,0,0,0,0,0];
+  for(const mo of compareMonths){
+    const dim2 = daysInMonth(mo.y, mo.m);
+    for(let d=1; d<=dim2; d++) wdCount[weekdayOf(mo.y,mo.m,d)] += 1;
+  }
+  for(const r of STATE.funilRows){
+    if(!r.ym || !r.day || !matchSeg(r.segment) || !matchCity(r.city)) continue;
+    if(!compareMonths.some(mo=>mo.y===r.ym.y && mo.m===r.ym.m)) continue;
+    wdLeadSum[weekdayOf(r.ym.y, r.ym.m, r.day)] += r.lead;
+  }
+  const wdLeadAvg = wdLeadSum.map((sum,i)=> wdCount[i]>0 ? sum/wdCount[i] : 0);
+
+  const wkTotals = {}; 
+  for(let w=1; w<=5; w++) wkTotals[w] = {lead:0,doc:0,cpf:0,vendas:0,days:0};
+  for(const mo of compareMonths){
+    const dim2 = daysInMonth(mo.y, mo.m);
+    for(let d=1; d<=dim2; d++) wkTotals[weekOfMonthDay(d)].days += 1;
+  }
+  for(const r of STATE.funilRows){
+    if(!r.ym || !r.week || !matchSeg(r.segment) || !matchCity(r.city)) continue;
+    if(!compareMonths.some(mo=>mo.y===r.ym.y && mo.m===r.ym.m)) continue;
+    const b = wkTotals[r.week]; if(!b) continue;
+    b.lead += r.lead; b.doc += r.doc; b.cpf += r.cpf;
+  }
+  for(const r of STATE.vendasRows){
+    if(!r.ym || !r.week || !matchSeg(r.segment) || !matchCity(r.city)) continue;
+    if(!compareMonths.some(mo=>mo.y===r.ym.y && mo.m===r.ym.m)) continue;
+    const b = wkTotals[r.week]; if(!b) continue;
+    b.vendas += r.vendas;
+  }
+  const totalLeadAllWeeks = Object.values(wkTotals).reduce((a,b)=>a+b.lead,0);
+  const totalDaysAllWeeks = Object.values(wkTotals).reduce((a,b)=>a+b.days,0);
+  const overallDailyLead = totalDaysAllWeeks>0 ? totalLeadAllWeeks/totalDaysAllWeeks : 0;
+
+  const volFactor = {}, convDoc = {}, convCpf = {}, convVendas = {};
+  for(let w=1; w<=5; w++){
+    const b = wkTotals[w];
+    const dailyLead = b.days>0 ? b.lead/b.days : 0;
+    volFactor[w] = overallDailyLead>0 ? dailyLead/overallDailyLead : 1;
+    convDoc[w] = b.lead>0 ? b.doc/b.lead : 0;
+    convCpf[w] = b.doc>0 ? b.cpf/b.doc : 0;
+    convVendas[w] = b.cpf>0 ? b.vendas/b.cpf : 0;
+  }
+
+  const remainder = {lead:0,doc:0,cpf:0,vendas:0};
+  for(let d=asOfDay+1; d<=dim; d++){
+    const wd = weekdayOf(cur.y, cur.m, d);
+    const wk = weekOfMonthDay(d);
+    const projLead = wdLeadAvg[wd] * volFactor[wk];
+    const projDoc = projLead * convDoc[wk];
+    const projCpf = projDoc * convCpf[wk];
+    const projVendas = projCpf * convVendas[wk];
+    remainder.lead += projLead; remainder.doc += projDoc; remainder.cpf += projCpf; remainder.vendas += projVendas;
+  }
+
+  const projected = {}, linear = {};
+  for(const sk of stagesKeys){
+    projected[sk] = actualToDate[sk] + remainder[sk];
+    linear[sk] = asOfDay>0 ? (actualToDate[sk]/asOfDay)*dim : actualToDate[sk];
+  }
+
+  const histAvg = {lead:null,doc:null,cpf:null,vendas:null};
+  if(compareMonths.length){
+    for(const sk of stagesKeys){
+      histAvg[sk] = Object.values(wkTotals).reduce((a,b)=>a+b[sk],0)/compareMonths.length;
+    }
+  }
+
+  const weekPattern = [1,2,3,4,5].map(w=>({
+    week: w, volFactor: volFactor[w], convDoc: convDoc[w], convCpf: convCpf[w], convVendas: convVendas[w],
+  }));
+
+  return {asOfDay, dim, monthClosed: asOfDay>=dim, actualToDate, projected, linear, histAvg, compareMonths, weekPattern};
+}
+
+function findUpdatedAt(wb){
+  const aoa = sheetToAOA(wb, 'Coleta meta');
+  if(!aoa) return null;
+  const re = /atualizado em[:\s]*?(\d{1,2})\/(\d{1,2})\/(\d{4})/i;
+  for(const row of aoa){
+    for(const cell of row){
+      if(typeof cell !== 'string') continue;
+      const m = cell.match(re);
+      if(m){
+        return {
+          text: cell.trim(),
+          y: parseInt(m[3],10), mo: parseInt(m[2],10), d: parseInt(m[1],10),
+        };
+      }
+    }
+  }
+  return null;
+}
+function daysInMonth(y, m){
+  return new Date(y, m, 0).getDate();
+}
+function weekdayOf(y, m, d){
+  return new Date(y, m-1, d).getDay(); 
+}
+function weekOfMonthDay(d){
+  return Math.min(5, Math.floor((d-1)/7)+1);
+}
+function monthKey(mo){
+  return mo.y+'-'+mo.m;
+}
+
+function buildAvailableMonths(funilRows, vendasRows){
+  const map = new Map();
+  for(const r of funilRows){ if(r.ym) map.set(monthKey(r.ym), r.ym); }
+  for(const r of vendasRows){ if(r.ym) map.set(monthKey(r.ym), r.ym); }
+  const list = Array.from(map.values());
+  list.sort((a,b)=> a.y!==b.y ? a.y-b.y : a.m-b.m);
+  return list.map(ym=>({
+    y: ym.y, m: ym.m,
+    name: MESES_PT[ym.m-1].charAt(0).toUpperCase()+MESES_PT[ym.m-1].slice(1),
+  }));
+}
+
+function processWorkbook(wb, filename){
+  const coletaAOA = sheetToAOA(wb, 'Coletafunil');
+  const divAOA = sheetToAOA(wb, 'divsemana');
+
+  const missing = [];
+  if(!coletaAOA) missing.push('Coletafunil');
+  if(!divAOA) missing.push('divsemana');
+  if(missing.length){
+    setStatus('err', 'Não encontrei a(s) aba(s) <strong>'+missing.join(', ')+'</strong> nesse arquivo. Confirme se é a base completa do Ritmo SPI.');
+    return;
+  }
+
+  const months = buildMonthLookup(coletaAOA);
+  if(!months){
+    setStatus('err', 'Não consegui localizar a tabela de referência de meses (Coletafunil, células E1:G4). O layout da base pode ter mudado.');
+    return;
+  }
+
+  const segmentGroups = buildSegmentGroups(divAOA);
+  const funilRows = parseFunilRows(coletaAOA);
+  const vendasRows = parseVendasRows(coletaAOA);
+
+  if(funilRows.length===0){
+    setStatus('err', 'A aba Coletafunil não trouxe linhas de funil reconhecíveis (não achei o cabeçalho "LEAD"). Confirme o layout da base.');
+    return;
+  }
+
+  const curMonth = months[3];
+  const updatedAt = findUpdatedAt(wb);
+  let day;
+  if(updatedAt && updatedAt.y===curMonth.y && updatedAt.mo===curMonth.m){
+    day = updatedAt.d;
+  }else{
+    day = daysInMonth(curMonth.y, curMonth.m);
+  }
+  const currentWeek = Math.min(5, Math.floor((day-1)/7)+1);
+  const elapsedDays = day - (currentWeek-1)*7;
+
+  const blockCodes = {};
+  for(const b of BLOCKS){
+    blockCodes[b.key] = b.group===null ? null : (segmentGroups[b.group] || []);
+  }
+
+  const availableMonths = buildAvailableMonths(funilRows, vendasRows);
+
+  const now = new Date();
+  STATE = {
+    months, availableMonths, blockCodes,
+    funilRows, vendasRows,
+    day, currentWeek, elapsedDays,
+    filename, loadedAt: now,
+    totalRows: funilRows.length + vendasRows.length,
+  };
+
+  const updatedText = updatedAt ? updatedAt.text : ('base carregada às '+now.toLocaleTimeString('pt-BR'));
+  const cpfLabel = funilRows.__cpfLabel;
+  const cityFound = !!(funilRows.__cityFound || vendasRows.__cityFound);
+  let extra = ' · CPF Aprovado = coluna "'+escapeHtml(cpfLabel || '—')+'"';
+  extra += cityFound ? ' · detalhamento por cidade disponível' : '';
+  setStatus('ok', '<strong>'+escapeHtml(filename)+'</strong> · '+escapeHtml(updatedText)+' · mês atual: <strong>'+months[3].name+'</strong>'+extra);
+
+  renderTabs();
+  renderBlock(activeBlock);
+}
+
+function renderTabs(){
+  tabsEl.innerHTML = '';
+  for(const b of BLOCKS){
+    const btn = document.createElement('button');
+    btn.textContent = b.title;
+    if(b.key===activeBlock) btn.classList.add('active');
+    btn.addEventListener('click', ()=>{ activeBlock=b.key; activeCity=null; renderTabs(); renderBlock(b.key); });
+    tabsEl.appendChild(btn);
+  }
+}
+
+function fmtInt(n){
+  return Math.round(n).toLocaleString('pt-BR');
+}
+function fmtRitmo(n){
+  if(n===null) return '—';
+  return n.toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1});
+}
+
+function buildTable(block, mode, cityFilter){
+  const data = aggregateBlock(STATE.funilRows, STATE.vendasRows, STATE.months, STATE.blockCodes[block.key], cityFilter);
+  const months = STATE.months;
+  let html = '<table class="data-table"><thead>';
+
+  html += '<tr><th class="rowlabel"></th>';
+  for(const st of STAGES){
+    html += '<th colspan="4" class="stage-head '+st.cls+'">'+st.label+'</th>';
+  }
+  html += '</tr>';
+
+  html += '<tr class="month-row"><th class="rowlabel">Semana</th>';
+  for(const st of STAGES){
+    months.forEach((mo,i)=>{
+      const curCls = i===3 ? ' current-col' : '';
+      html += '<th class="'+curCls.trim()+'">'+mo.name+'</th>';
+    });
+  }
+  html += '</tr></thead><tbody>';
+
+  const totals = {};
+  for(const st of STAGES) totals[st.key] = [0,0,0,0];
+
+  for(let w=1; w<=5; w++){
+    html += '<tr><td class="rowlabel">Semana '+w+'</td>';
+    for(const st of STAGES){
+      months.forEach((mo,mi)=>{
+        const cell = data[mi][w];
+        const abs = cell ? cell[st.key] : 0;
+        const curCls = mi===3 ? ' current-col' : '';
+        if(mode==='abs'){
+          totals[st.key][mi] += abs;
+          html += '<td class="'+curCls.trim()+'">'+fmtInt(abs)+'</td>';
+        }else{
+          let val;
+          if(mi<3){
+            val = abs/7;
+          }else{
+            if(w>STATE.currentWeek) val = null;
+            else if(w<STATE.currentWeek) val = abs/7;
+            else val = abs/STATE.elapsedDays;
+          }
+          const naCls = val===null ? ' na' : '';
+          html += '<td class="'+(curCls+naCls).trim()+'">'+fmtRitmo(val)+'</td>';
+        }
+      });
+    }
+    html += '</tr>';
+  }
+
+  if(mode==='abs'){
+    html += '<tr class="total-row"><td class="rowlabel">Total</td>';
+    for(const st of STAGES){
+      months.forEach((mo,mi)=>{
+        const curCls = mi===3 ? ' current-col' : '';
+        html += '<td class="'+curCls.trim()+'">'+fmtInt(totals[st.key][mi])+'</td>';
+      });
+    }
+    html += '</tr>';
+  }
+
+  html += '</tbody></table>';
+  return html;
+}
+
+function fmtDelta(pct){
+  if(pct===null || !isFinite(pct)) return '';
+  const sign = pct>=0 ? '+' : '';
+  return sign+pct.toLocaleString('pt-BR',{maximumFractionDigits:1})+'%';
+}
+
+function renderMonthControls(){
+  const months = STATE.months;
+  let html = '<div class="month-controls"><span class="mc-label">Meses comparados:</span>';
+  const labels = ['Mês -3','Mês -2','Mês -1'];
+  for(let i=0;i<3;i++){
+    html += '<div class="mc-item"><label>'+labels[i]+'</label><select data-month-idx="'+i+'">';
+    for(const mo of STATE.availableMonths){
+      const sel = (mo.y===months[i].y && mo.m===months[i].m) ? ' selected' : '';
+      html += '<option value="'+mo.y+'-'+mo.m+'"'+sel+'>'+mo.name+'/'+mo.y+'</option>';
+    }
+    html += '</select></div>';
+  }
+  html += '<div class="mc-item fixed"><label>Mês atual</label><span class="mc-fixed">'+months[3].name+'/'+months[3].y+'</span></div>';
+  html += '</div>';
+  return html;
+}
+
+function renderProjectionTable(proj){
+  let html = '';
+  if(proj.monthClosed){
+    html += '<p class="proj-note">O mês atual já está com todos os dias na base — não há dias restantes para projetar.</p>';
+  }else{
+    html += '<p class="proj-note">Projeção com base no realizado até o dia '+proj.asOfDay+' de '+proj.dim+'.</p>';
+  }
+  html += '<table class="proj-table"><thead><tr><th class="rowlabel">Etapa</th><th>Realizado até agora</th><th>Projeção (funil por semana)</th><th>Projeção simples (linear)</th><th>Média histórica do mês</th><th>Projeção vs. média histórica</th></tr></thead><tbody>';
+  for(const st of STAGES){
+    const hist = proj.histAvg[st.key];
+    const pct = (hist!==null && hist!==0) ? ((proj.projected[st.key]/hist)-1)*100 : null;
+    const deltaCls = pct===null ? '' : (pct>=0 ? 'up' : 'down');
+    html += '<tr><td class="rowlabel">'+st.label+'</td>'
+      + '<td>'+fmtInt(proj.actualToDate[st.key])+'</td>'
+      + '<td>'+fmtInt(proj.projected[st.key])+'</td>'
+      + '<td>'+fmtInt(proj.linear[st.key])+'</td>'
+      + '<td>'+(hist!==null ? fmtInt(hist) : '—')+'</td>'
+      + '<td class="'+deltaCls+'">'+(pct!==null ? fmtDelta(pct) : '—')+'</td>'
+      + '</tr>';
+  }
+  html += '</tbody></table>';
+
+  return html;
+}
+
+function renderCityTabs(block, cityList){
+  let html = '<div class="city-tabs">';
+  html += '<span class="mc-label">Ver por:</span>';
+  html += '<button class="city-tab'+(activeCity===null?' active':'')+'" data-city="">Regional inteira</button>';
+  for(const city of cityList){
+    html += '<button class="city-tab'+(activeCity===city?' active':'')+'" data-city="'+escapeHtml(city)+'">'+escapeHtml(city)+'</button>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderBlock(key){
+  const block = BLOCKS.find(b=>b.key===key);
+  if(!STATE || !block) return;
+
+  const isRegional = block.group !== null; 
+  const cityList = isRegional ? resolveCityList(block.key, STATE.funilRows, STATE.vendasRows, STATE.blockCodes[block.key]) : [];
+  const cityFilter = isRegional ? activeCity : null;
+
+  let html = '';
+  html += '<div class="flow">';
+  const flowColors = {lead:'var(--lead)', doc:'var(--doc)', cpf:'var(--cpf)', vendas:'var(--vendas)'};
+  STAGES.forEach((st,i)=>{
+    html += '<div class="stage"><span class="dot" style="background:'+flowColors[st.key]+'"></span>'+st.label+'</div>';
+    if(i<STAGES.length-1) html += '<span class="arrow">→</span>';
+  });
+  html += '</div>';
+
+  const titleSuffix = cityFilter ? ' — '+escapeHtml(cityFilter) : '';
+  html += '<div class="block-title"><h2>'+block.title+titleSuffix+'</h2><button class="btn-outline" id="projBtn">Projetar fechamento do mês</button></div>';
+
+  if(isRegional){
+    if(cityList.length){
+      html += renderCityTabs(block, cityList);
+    }
+  }
+
+  html += renderMonthControls();
+
+  html += '<div id="projPanel"></div>';
+
+  html += '<div class="panel abs"><h3><span class="tag">ABSOLUTO</span>Comparação de números do funil</h3>';
+  html += buildTable(block, 'abs', cityFilter);
+  html += '</div>';
+
+  html += '<div class="panel ritmo"><h3><span class="tag">RITMO</span>Média por dia de cada etapa</h3>';
+  html += buildTable(block, 'ritmo', cityFilter);
+  html += '</div>';
+
+  app.innerHTML = html;
+
+  app.querySelectorAll('select[data-month-idx]').forEach(sel=>{
+    sel.addEventListener('change', (e)=>{
+      const idx = parseInt(e.target.getAttribute('data-month-idx'),10);
+      const [y,m] = e.target.value.split('-').map(Number);
+      const found = STATE.availableMonths.find(mo=>mo.y===y && mo.m===m);
+      if(found) STATE.months[idx] = found;
+      renderBlock(activeBlock);
+    });
+  });
+
+  app.querySelectorAll('.city-tab').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      activeCity = btn.getAttribute('data-city') || null;
+      renderBlock(activeBlock);
+    });
+  });
+
+  const projBtn = document.getElementById('projBtn');
+  const projPanel = document.getElementById('projPanel');
+  let projOpen = false;
+  projBtn.addEventListener('click', ()=>{
+    projOpen = !projOpen;
+    if(projOpen){
+      const proj = computeProjection(block.key, cityFilter);
+      const titleFull = block.title+titleSuffix;
+      projPanel.innerHTML = '<div class="proj-panel"><div class="proj-head"><h3>Projeção de fechamento — '+titleFull+'</h3></div>'+renderProjectionTable(proj)+'</div>';
+      projBtn.textContent = 'Ocultar projeção';
+    }else{
+      projPanel.innerHTML = '';
+      projBtn.textContent = 'Projetar fechamento do mês';
+    }
+  });
+}
+</script>
+</body>
+</html>
