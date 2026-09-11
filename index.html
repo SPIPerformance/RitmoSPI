@@ -316,7 +316,6 @@ const NOME_PLANILHA = 'base.xlsx';
 
 const MESES_PT = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
 const MES_ABREV = {jan:1,fev:2,mar:3,abr:4,mai:5,jun:6,jul:7,ago:8,set:9,out:10,nov:11,dez:12};
-const WEEKDAYS_PT = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
 
 const STAGES = [
   {key:'lead',   label:'LEAD',                 cls:'lead'},
@@ -359,15 +358,11 @@ async function carregarBaseDoRepositorio() {
   setStatus(null, 'Baixando <strong>' + NOME_PLANILHA + '</strong> do repositório...');
   try {
     const response = await fetch(NOME_PLANILHA + '?t=' + new Date().getTime());
-    
-    if (!response.ok) {
-      throw new Error('Arquivo não encontrado no repositório.');
-    }
+    if (!response.ok) throw new Error('Arquivo não encontrado no repositório.');
     
     const arrayBuffer = await response.arrayBuffer();
     const wb = XLSX.read(new Uint8Array(arrayBuffer), {type:'array', cellDates:true});
     processWorkbook(wb, NOME_PLANILHA);
-
   } catch(err) {
     console.error(err);
     setStatus('err', 'Falha ao buscar a planilha automática. Verifique se o arquivo <strong>' + NOME_PLANILHA + '</strong> existe no repositório.');
@@ -396,13 +391,10 @@ function handleFile(file){
       const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array', cellDates:true});
       processWorkbook(wb, file.name);
     }catch(err){
-      console.error(err);
       setStatus('err', 'Não consegui ler esse arquivo. Verifique se é o Excel correto (.xlsx) e tente de novo.');
     }
   };
-  reader.onerror = function(){
-    setStatus('err', 'Falha ao abrir o arquivo.');
-  };
+  reader.onerror = function(){ setStatus('err', 'Falha ao abrir o arquivo.'); };
   reader.readAsArrayBuffer(file);
 }
 
@@ -424,17 +416,14 @@ function ymFromDate(d){
   return {y:d.getFullYear(), m:d.getMonth()+1};
 }
 
-// Analisador genérico e blindado de Mês e Ano. Suporta tanto "jan/2026" quanto datas completas "15/01/2026"
 function parseAnyYM(val){
   if(val===null || val===undefined) return null;
   if(val instanceof Date) return ymFromDate(val);
   const s = String(val).trim().toLowerCase();
   
-  // Tenta formato DD/MM/YYYY (ignorando as horas, se houver)
   let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
   if(m) return {y:parseInt(m[3],10), m:parseInt(m[2],10)};
   
-  // Tenta formato MMM/YYYY (ex: jan/2026)
   m = s.match(/^([a-zç]{3})\/(\d{4})/);
   if(m && MES_ABREV[m[1]]) return {y:parseInt(m[2],10), m:MES_ABREV[m[1]]};
   
@@ -447,13 +436,13 @@ function weekNum(val){
   if(m) return parseInt(m[1],10);
   return null;
 }
+
 function num(v){
   const n = Number(v);
   return isFinite(n) ? n : 0;
 }
 
 // RACIONAL ESTRITO DAS SEMANAS:
-// Semana 1: 1 a 7 | Semana 2: 8 a 14 | Semana 3: 15 a 21 | Semana 4: 22 a 28 | Semana 5: 29+
 function weekOfMonthDay(d){
   const day = Number(d);
   if(!isFinite(day) || day <= 0) return null;
@@ -464,14 +453,17 @@ function weekOfMonthDay(d){
   return 5;
 }
 
-// Extrai o Dia de forma segura (se a coluna de dia falhar ou estiver em branco, extrai o dia da própria coluna de Data)
-function extractDaySafely(row, diaCol, dateCol){
-  // 1. Tenta pegar da coluna de Dia direto
-  if(diaCol >= 0){
-    const v = parseInt(normStr(row[diaCol]), 10);
-    if(isFinite(v) && v > 0) return v;
+// Essa é a nova função blindada: ela varre TODAS as colunas de Dia da planilha para achar
+// o dado certo, resolvendo o problema de desalinhamento de colunas entre Leads e Vendas
+function extractDayFromMultipleCols(row, colsArr, dateCol){
+  for(const col of colsArr){
+    const cellVal = row[col];
+    if(cellVal !== null && cellVal !== undefined && cellVal !== ''){
+       const v = parseInt(normStr(cellVal), 10);
+       if(isFinite(v) && v > 0) return v;
+    }
   }
-  // 2. Se falhar, arranca o dia do objeto de Data / texto de data completo
+  
   if(dateCol >= 0){
     const dVal = row[dateCol];
     if(dVal instanceof Date) return dVal.getDate();
@@ -532,7 +524,6 @@ function findCityColumn(headerRowArr){
   }
   return -1;
 }
-
 function findColExact(headerRowArr, text){
   const target = text.trim().toLowerCase();
   for(let c=0; c<headerRowArr.length; c++){
@@ -547,47 +538,32 @@ function findColMatch(headerRowArr, regex){
   return -1;
 }
 
-function findWeekColumnByData(aoa, headerRow, sampleRows){
-  const counts = {};
-  const limit = Math.min(aoa.length, headerRow+1+(sampleRows||400));
-  for(let r=headerRow+1; r<limit; r++){
-    const row = aoa[r] || [];
-    for(let c=0; c<row.length; c++){
-      if(/^SEMANA\s*\d\s*$/i.test(normStr(row[c]))) counts[c] = (counts[c]||0)+1;
-    }
-  }
-  let best=-1, bestCount=0;
-  for(const c in counts){ if(counts[c]>bestCount){ bestCount=counts[c]; best=parseInt(c,10); } }
-  return bestCount>0 ? best : -1;
-}
-function findWeekColumn(headerRowArr, aoa, headerRow){
-  const byText = findColExact(headerRowArr, 'semana');
-  if(byText>=0) return byText;
-  return findWeekColumnByData(aoa, headerRow);
-}
-
 function parseFunilRows(aoa){
   let headerRow = -1;
   for(let r=0;r<aoa.length;r++){
     const row = aoa[r] || [];
-    const hasLead = row.some(c=>normStr(c).toUpperCase()==='LEAD');
-    const hasRegional = row.some(c=>normStr(c).toLowerCase()==='regional');
-    if(hasLead && hasRegional){ headerRow = r; break; }
+    if(row.some(c=>normStr(c).toUpperCase()==='LEAD') && row.some(c=>normStr(c).toLowerCase()==='regional')){ 
+      headerRow = r; break; 
+    }
   }
   if(headerRow===-1) return [];
   const header = aoa[headerRow] || [];
 
   const regionalCol = findColExact(header, 'regional');
   const cityCol = findCityColumn(header);
-  let diaCol = findColExact(header, 'dia');
-  if(diaCol < 0) diaCol = findColMatch(header, /^\s*dia\s*$/i);
+  
+  const diaCols = [];
+  for(let c=0; c<header.length; c++) if(/\bdia\b/i.test(normStr(header[c]))) diaCols.push(c);
+  
+  const weekCols = [];
+  for(let c=0; c<header.length; c++) if(/\bsemana\b/i.test(normStr(header[c]))) weekCols.push(c);
+
   const dataBaseCol = findColMatch(header, /data.?base/i);
   const leadCol = findColMatch(header, /^lead$/i);
   const docCol = findColMatch(header, /documenta.*enviada/i);
   let cpfCol = findColExact(header, 'CPF APROVADO');
   if(cpfCol<0) cpfCol = findColExact(header, 'CPF: COND. PEND.|APRV. PEND.|COND.|APRV.');
   if(cpfCol<0) cpfCol = findColMatch(header, /cpf.*(aprv|aprovad)/i);
-  const weekCol = findWeekColumn(header, aoa, headerRow);
 
   if(regionalCol<0 || leadCol<0 || dataBaseCol<0) return [];
 
@@ -596,12 +572,15 @@ function parseFunilRows(aoa){
     const row = aoa[r] || [];
     if(row[leadCol]===null && (docCol<0 || row[docCol]===null) && (cpfCol<0 || row[cpfCol]===null)) continue;
     
-    // Puxa o dia de forma blindada (da coluna de Dia, ou da Data Base)
-    const dayVal = extractDaySafely(row, diaCol, dataBaseCol);
+    const dayVal = extractDayFromMultipleCols(row, diaCols, dataBaseCol);
     
-    // PRIORIDADE MÁXIMA: Racional de Dia
     let week = isFinite(dayVal) ? weekOfMonthDay(dayVal) : null;
-    if(week===null && weekCol>=0) week = weekNum(row[weekCol]);
+    if(week===null){
+      for(const wc of weekCols){
+        const w = weekNum(row[wc]);
+        if(w!==null){ week = w; break; }
+      }
+    }
 
     rows.push({
       segment: normStr(row[regionalCol]),
@@ -635,25 +614,28 @@ function parseVendasRows(aoa){
   let vendasCol = findColExact(header, '# Vendas');
   if(vendasCol<0) vendasCol = findColMatch(header, /vendas/i);
   
-  // Encontrar coluna de Dia para vendas costuma falhar se o cabeçalho for "Dia " com espaços
-  let diaCol = findColExact(header, 'Dia');
-  if(diaCol < 0) diaCol = findColMatch(header, /^\s*dia\s*$/i);
+  const diaCols = [];
+  for(let c=0; c<header.length; c++) if(/\bdia\b/i.test(normStr(header[c]))) diaCols.push(c);
   
-  const weekCol = findWeekColumn(header, aoa, headerRow);
+  const weekCols = [];
+  for(let c=0; c<header.length; c++) if(/\bsemana\b/i.test(normStr(header[c]))) weekCols.push(c);
 
   if(segCol<0 || dataCol<0 || vendasCol<0) return [];
 
   const rows = [];
   for(let r=headerRow+1; r<aoa.length; r++){
     const row = aoa[r] || [];
-    if(row[vendasCol]===null) continue;
+    if(row[vendasCol]===null || row[vendasCol]===undefined || row[vendasCol]==='') continue;
     
-    // Puxa o dia de forma blindada (da coluna de Dia, ou da Data Base de Vendas)
-    const dayVal = extractDaySafely(row, diaCol, dataCol);
+    const dayVal = extractDayFromMultipleCols(row, diaCols, dataCol);
     
-    // PRIORIDADE MÁXIMA: Racional de Dia
     let week = isFinite(dayVal) ? weekOfMonthDay(dayVal) : null;
-    if(week===null && weekCol>=0) week = weekNum(row[weekCol]);
+    if(week===null){
+      for(const wc of weekCols){
+        const w = weekNum(row[wc]);
+        if(w!==null){ week = w; break; }
+      }
+    }
 
     rows.push({
       segment: normStr(row[segCol]),
