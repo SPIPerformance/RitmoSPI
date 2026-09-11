@@ -453,29 +453,6 @@ function weekOfMonthDay(d){
   return 5;
 }
 
-// Essa é a nova função blindada: ela varre TODAS as colunas de Dia da planilha para achar
-// o dado certo, resolvendo o problema de desalinhamento de colunas entre Leads e Vendas
-function extractDayFromMultipleCols(row, colsArr, dateCol){
-  for(const col of colsArr){
-    const cellVal = row[col];
-    if(cellVal !== null && cellVal !== undefined && cellVal !== ''){
-       const v = parseInt(normStr(cellVal), 10);
-       if(isFinite(v) && v > 0) return v;
-    }
-  }
-  
-  if(dateCol >= 0){
-    const dVal = row[dateCol];
-    if(dVal instanceof Date) return dVal.getDate();
-    if(typeof dVal === 'string'){
-      const str = dVal.trim();
-      const m = str.match(/^(\d{1,2})\/\d{1,2}\/\d{4}/);
-      if(m) return parseInt(m[1], 10);
-    }
-  }
-  return NaN;
-}
-
 function daysInMonth(y, m){
   return new Date(y, m, 0).getDate();
 }
@@ -518,52 +495,43 @@ function buildSegmentGroups(aoa){
   return groups;
 }
 
-function findCityColumn(headerRowArr){
-  for(let c=0; c<headerRowArr.length; c++){
-    if(/cidade/i.test(normStr(headerRowArr[c]))) return c;
-  }
-  return -1;
-}
-function findColExact(headerRowArr, text){
-  const target = text.trim().toLowerCase();
-  for(let c=0; c<headerRowArr.length; c++){
-    if(normStr(headerRowArr[c]).toLowerCase()===target) return c;
-  }
-  return -1;
-}
-function findColMatch(headerRowArr, regex){
-  for(let c=0; c<headerRowArr.length; c++){
-    if(regex.test(normStr(headerRowArr[c]))) return c;
-  }
-  return -1;
-}
-
+// --- FUNIL: Isolado estritamente à esquerda (antes de IdOportunidade) ---
 function parseFunilRows(aoa){
   let headerRow = -1;
+  let maxIdx = aoa[0] ? aoa[0].length : 1000;
+
   for(let r=0;r<aoa.length;r++){
     const row = aoa[r] || [];
-    if(row.some(c=>normStr(c).toUpperCase()==='LEAD') && row.some(c=>normStr(c).toLowerCase()==='regional')){ 
-      headerRow = r; break; 
+    const hasLead = row.some(c=>normStr(c).toUpperCase()==='LEAD');
+    const hasRegional = row.some(c=>normStr(c).toLowerCase()==='regional');
+    if(hasLead && hasRegional){ 
+      headerRow = r; 
+      // Procura onde começam as vendas para criar a "parede" invisível
+      const idOpIdx = row.findIndex(c=>/idoportunidade/i.test(normStr(c)));
+      if(idOpIdx > 0) maxIdx = idOpIdx;
+      break; 
     }
   }
   if(headerRow===-1) return [];
   const header = aoa[headerRow] || [];
 
-  const regionalCol = findColExact(header, 'regional');
-  const cityCol = findCityColumn(header);
-  
-  const diaCols = [];
-  for(let c=0; c<header.length; c++) if(/\bdia\b/i.test(normStr(header[c]))) diaCols.push(c);
-  
-  const weekCols = [];
-  for(let c=0; c<header.length; c++) if(/\bsemana\b/i.test(normStr(header[c]))) weekCols.push(c);
+  function searchCol(regex) {
+    for(let c=0; c<maxIdx; c++){ // Busca APENAS na parte do funil
+      if(header[c] !== undefined && regex.test(normStr(header[c]))) return c;
+    }
+    return -1;
+  }
 
-  const dataBaseCol = findColMatch(header, /data.?base/i);
-  const leadCol = findColMatch(header, /^lead$/i);
-  const docCol = findColMatch(header, /documenta.*enviada/i);
-  let cpfCol = findColExact(header, 'CPF APROVADO');
-  if(cpfCol<0) cpfCol = findColExact(header, 'CPF: COND. PEND.|APRV. PEND.|COND.|APRV.');
-  if(cpfCol<0) cpfCol = findColMatch(header, /cpf.*(aprv|aprovad)/i);
+  const regionalCol = searchCol(/^regional$/i);
+  const cityCol = searchCol(/cidade/i);
+  const diaCol = searchCol(/^\s*dia\s*$/i);
+  const dataBaseCol = searchCol(/data.?base/i);
+  const leadCol = searchCol(/^lead$/i);
+  const docCol = searchCol(/documenta.*enviada/i);
+  let cpfCol = searchCol(/^CPF APROVADO$/i);
+  if(cpfCol<0) cpfCol = searchCol(/CPF:\s*COND.\s*PEND.\|APRV.\s*PEND.\|COND.\|APRV./i);
+  if(cpfCol<0) cpfCol = searchCol(/cpf.*(aprv|aprovad)/i);
+  const weekCol = searchCol(/^\s*semana\s*$/i);
 
   if(regionalCol<0 || leadCol<0 || dataBaseCol<0) return [];
 
@@ -572,15 +540,24 @@ function parseFunilRows(aoa){
     const row = aoa[r] || [];
     if(row[leadCol]===null && (docCol<0 || row[docCol]===null) && (cpfCol<0 || row[cpfCol]===null)) continue;
     
-    const dayVal = extractDayFromMultipleCols(row, diaCols, dataBaseCol);
-    
-    let week = isFinite(dayVal) ? weekOfMonthDay(dayVal) : null;
-    if(week===null){
-      for(const wc of weekCols){
-        const w = weekNum(row[wc]);
-        if(w!==null){ week = w; break; }
+    let dayVal = NaN;
+    if(diaCol >= 0){
+      dayVal = parseInt(normStr(row[diaCol]), 10);
+    }
+    if(!isFinite(dayVal) || dayVal <= 0){
+      const dVal = row[dataBaseCol];
+      if(dVal instanceof Date) dayVal = dVal.getDate();
+      else if(typeof dVal === 'string'){
+        const m = dVal.trim().match(/^(\d{1,2})\/\d{1,2}\/\d{4}/);
+        if(m) dayVal = parseInt(m[1], 10);
       }
     }
+    
+    let week = isFinite(dayVal) ? weekOfMonthDay(dayVal) : null;
+    if(week===null && weekCol>=0) {
+       week = weekNum(row[weekCol]);
+    }
+    if(week===null && isFinite(dayVal)) week = weekOfMonthDay(dayVal);
 
     rows.push({
       segment: normStr(row[regionalCol]),
@@ -598,27 +575,41 @@ function parseFunilRows(aoa){
   return rows;
 }
 
+// --- VENDAS: Isolado estritamente à direita (após IdOportunidade) ---
 function parseVendasRows(aoa){
   let headerRow = -1;
+  let startIdx = 0;
+
   for(let r=0;r<aoa.length;r++){
     const row = aoa[r] || [];
-    if(row.some(c=>normStr(c)==='IdOportunidade')){ headerRow = r; break; }
+    const idx = row.findIndex(c=>/idoportunidade/i.test(normStr(c)));
+    if(idx >= 0){ 
+      headerRow = r; 
+      startIdx = idx; // Parede invisível: só olha daqui para frente
+      break; 
+    }
   }
   if(headerRow===-1) return [];
   const header = aoa[headerRow] || [];
 
-  const segCol = findColExact(header, 'RegionalComercial');
-  const cityCol = findCityColumn(header);
-  let dataCol = findColMatch(header, /DataBaseAssinaturaContratoSalesforce/i);
-  if(dataCol<0) dataCol = findColMatch(header, /assinaturacontrato/i);
-  let vendasCol = findColExact(header, '# Vendas');
-  if(vendasCol<0) vendasCol = findColMatch(header, /vendas/i);
+  function searchCol(regex) {
+    for(let c=startIdx; c<header.length; c++){ // Busca APENAS na parte de vendas
+      if(header[c] !== undefined && regex.test(normStr(header[c]))) return c;
+    }
+    return -1;
+  }
+
+  const segCol = searchCol(/^RegionalComercial$/i);
+  const cityCol = searchCol(/cidade/i);
+  let dataCol = searchCol(/DataBaseAssinaturaContratoSalesforce/i);
+  if(dataCol<0) dataCol = searchCol(/assinaturacontrato/i);
+  if(dataCol<0) dataCol = searchCol(/data/i); // fallback
+
+  let vendasCol = searchCol(/^#\s*Vendas$/i);
+  if(vendasCol<0) vendasCol = searchCol(/vendas/i);
   
-  const diaCols = [];
-  for(let c=0; c<header.length; c++) if(/\bdia\b/i.test(normStr(header[c]))) diaCols.push(c);
-  
-  const weekCols = [];
-  for(let c=0; c<header.length; c++) if(/\bsemana\b/i.test(normStr(header[c]))) weekCols.push(c);
+  const diaCol = searchCol(/^\s*dia\s*$/i);
+  const weekCol = searchCol(/^\s*semana\s*$/i);
 
   if(segCol<0 || dataCol<0 || vendasCol<0) return [];
 
@@ -627,14 +618,23 @@ function parseVendasRows(aoa){
     const row = aoa[r] || [];
     if(row[vendasCol]===null || row[vendasCol]===undefined || row[vendasCol]==='') continue;
     
-    const dayVal = extractDayFromMultipleCols(row, diaCols, dataCol);
+    let dayVal = NaN;
+    if(diaCol >= 0){
+      dayVal = parseInt(normStr(row[diaCol]), 10);
+    }
+    // Se a coluna de dia falhar, arrancamos da DATA DE ASSINATURA DA VENDA (100% blindado)
+    if(!isFinite(dayVal) || dayVal <= 0){
+      const dVal = row[dataCol];
+      if(dVal instanceof Date) dayVal = dVal.getDate();
+      else if(typeof dVal === 'string'){
+        const m = dVal.trim().match(/^(\d{1,2})\/\d{1,2}\/\d{4}/);
+        if(m) dayVal = parseInt(m[1], 10);
+      }
+    }
     
     let week = isFinite(dayVal) ? weekOfMonthDay(dayVal) : null;
-    if(week===null){
-      for(const wc of weekCols){
-        const w = weekNum(row[wc]);
-        if(w!==null){ week = w; break; }
-      }
+    if(week===null && weekCol>=0) {
+       week = weekNum(row[weekCol]);
     }
 
     rows.push({
