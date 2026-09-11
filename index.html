@@ -423,22 +423,24 @@ function normStr(v){
 function ymFromDate(d){
   return {y:d.getFullYear(), m:d.getMonth()+1};
 }
-function parseDDMMYYYY(val){
-  if(val===null || val===undefined) return null;
-  if(val instanceof Date) return ymFromDate(val);
-  const s = String(val).trim();
-  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if(m) return {y:parseInt(m[3],10), m:parseInt(m[2],10)};
-  return null;
-}
-function parsePtMonthYear(val){
+
+// Analisador genérico e blindado de Mês e Ano. Suporta tanto "jan/2026" quanto datas completas "15/01/2026"
+function parseAnyYM(val){
   if(val===null || val===undefined) return null;
   if(val instanceof Date) return ymFromDate(val);
   const s = String(val).trim().toLowerCase();
-  const m = s.match(/^([a-zç]{3})\/(\d{4})$/);
+  
+  // Tenta formato DD/MM/YYYY (ignorando as horas, se houver)
+  let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if(m) return {y:parseInt(m[3],10), m:parseInt(m[2],10)};
+  
+  // Tenta formato MMM/YYYY (ex: jan/2026)
+  m = s.match(/^([a-zç]{3})\/(\d{4})/);
   if(m && MES_ABREV[m[1]]) return {y:parseInt(m[2],10), m:MES_ABREV[m[1]]};
+  
   return null;
 }
+
 function weekNum(val){
   const s = normStr(val).toUpperCase();
   const m = s.match(/SEMANA\s*(\d)/);
@@ -460,6 +462,26 @@ function weekOfMonthDay(d){
   if(day <= 21) return 3;
   if(day <= 28) return 4;
   return 5;
+}
+
+// Extrai o Dia de forma segura (se a coluna de dia falhar ou estiver em branco, extrai o dia da própria coluna de Data)
+function extractDaySafely(row, diaCol, dateCol){
+  // 1. Tenta pegar da coluna de Dia direto
+  if(diaCol >= 0){
+    const v = parseInt(normStr(row[diaCol]), 10);
+    if(isFinite(v) && v > 0) return v;
+  }
+  // 2. Se falhar, arranca o dia do objeto de Data / texto de data completo
+  if(dateCol >= 0){
+    const dVal = row[dateCol];
+    if(dVal instanceof Date) return dVal.getDate();
+    if(typeof dVal === 'string'){
+      const str = dVal.trim();
+      const m = str.match(/^(\d{1,2})\/\d{1,2}\/\d{4}/);
+      if(m) return parseInt(m[1], 10);
+    }
+  }
+  return NaN;
 }
 
 function daysInMonth(y, m){
@@ -557,7 +579,8 @@ function parseFunilRows(aoa){
 
   const regionalCol = findColExact(header, 'regional');
   const cityCol = findCityColumn(header);
-  const diaCol = findColExact(header, 'dia');
+  let diaCol = findColExact(header, 'dia');
+  if(diaCol < 0) diaCol = findColMatch(header, /^\s*dia\s*$/i);
   const dataBaseCol = findColMatch(header, /data.?base/i);
   const leadCol = findColMatch(header, /^lead$/i);
   const docCol = findColMatch(header, /documenta.*enviada/i);
@@ -572,15 +595,17 @@ function parseFunilRows(aoa){
   for(let r=headerRow+1; r<aoa.length; r++){
     const row = aoa[r] || [];
     if(row[leadCol]===null && (docCol<0 || row[docCol]===null) && (cpfCol<0 || row[cpfCol]===null)) continue;
-    const dayVal = diaCol>=0 ? parseInt(normStr(row[diaCol]),10) : NaN;
     
-    // PRIORIDADE: Racional direto por 'dia'. Se ausente, cai para a coluna 'SEMANA'.
+    // Puxa o dia de forma blindada (da coluna de Dia, ou da Data Base)
+    const dayVal = extractDaySafely(row, diaCol, dataBaseCol);
+    
+    // PRIORIDADE MÁXIMA: Racional de Dia
     let week = isFinite(dayVal) ? weekOfMonthDay(dayVal) : null;
     if(week===null && weekCol>=0) week = weekNum(row[weekCol]);
 
     rows.push({
       segment: normStr(row[regionalCol]),
-      ym: parseDDMMYYYY(row[dataBaseCol]),
+      ym: parseAnyYM(row[dataBaseCol]),
       day: isFinite(dayVal) ? dayVal : null,
       city: cityCol>=0 ? (normStr(row[cityCol]) || null) : null,
       lead: num(row[leadCol]),
@@ -609,7 +634,11 @@ function parseVendasRows(aoa){
   if(dataCol<0) dataCol = findColMatch(header, /assinaturacontrato/i);
   let vendasCol = findColExact(header, '# Vendas');
   if(vendasCol<0) vendasCol = findColMatch(header, /vendas/i);
-  const diaCol = findColExact(header, 'Dia');
+  
+  // Encontrar coluna de Dia para vendas costuma falhar se o cabeçalho for "Dia " com espaços
+  let diaCol = findColExact(header, 'Dia');
+  if(diaCol < 0) diaCol = findColMatch(header, /^\s*dia\s*$/i);
+  
   const weekCol = findWeekColumn(header, aoa, headerRow);
 
   if(segCol<0 || dataCol<0 || vendasCol<0) return [];
@@ -618,15 +647,17 @@ function parseVendasRows(aoa){
   for(let r=headerRow+1; r<aoa.length; r++){
     const row = aoa[r] || [];
     if(row[vendasCol]===null) continue;
-    const dayVal = diaCol>=0 ? parseInt(normStr(row[diaCol]),10) : NaN;
     
-    // PRIORIDADE: Racional direto por 'dia'. Se ausente, cai para a coluna 'SEMANA'.
+    // Puxa o dia de forma blindada (da coluna de Dia, ou da Data Base de Vendas)
+    const dayVal = extractDaySafely(row, diaCol, dataCol);
+    
+    // PRIORIDADE MÁXIMA: Racional de Dia
     let week = isFinite(dayVal) ? weekOfMonthDay(dayVal) : null;
     if(week===null && weekCol>=0) week = weekNum(row[weekCol]);
 
     rows.push({
       segment: normStr(row[segCol]),
-      ym: parsePtMonthYear(row[dataCol]),
+      ym: parseAnyYM(row[dataCol]),
       day: isFinite(dayVal) ? dayVal : null,
       city: cityCol>=0 ? (normStr(row[cityCol]) || null) : null,
       vendas: num(row[vendasCol]),
@@ -860,7 +891,6 @@ function processWorkbook(wb, filename){
     day = daysInMonth(curMonth.y, curMonth.m);
   }
   
-  // Semana atual (1..5) e dias decorridos nela
   const currentWeek = weekOfMonthDay(day);
   const elapsedDays = day - (currentWeek - 1) * 7;
 
@@ -946,19 +976,16 @@ function buildTable(block, mode, cityFilter){
         }else{
           let val;
           const dim = mo.y ? daysInMonth(mo.y, mo.m) : 30;
-          const w5Days = Math.max(1, dim - 28); // Dias reais da Semana 5 daquele mês
+          const w5Days = Math.max(1, dim - 28);
 
           if(mi<3){
-            // Meses passados: semanas 1-4 dividem por 7, semana 5 pelos dias reais restantes
             val = (w < 5) ? (abs / 7) : (abs / w5Days);
           }else{
-            // Mês atual em curso
             if(w > STATE.currentWeek) {
               val = null;
             } else if(w < STATE.currentWeek) {
               val = (w < 5) ? (abs / 7) : (abs / w5Days);
             } else {
-              // Semana atual: divide pelos dias decorridos até a data de corte
               val = STATE.elapsedDays > 0 ? (abs / STATE.elapsedDays) : abs;
             }
           }
