@@ -557,6 +557,13 @@ function parseFunilRows(aoa){
     const row = aoa[r] || [];
     if(row[leadCol]===null && (docCol<0 || row[docCol]===null) && (cpfCol<0 || row[cpfCol]===null)) continue;
     const dayVal = diaCol>=0 ? parseInt(normStr(row[diaCol]),10) : NaN;
+    // Some rows come with a blank "SEMANA" cell (seen e.g. when new city rows are appended
+    // to the base and that column's formula isn't dragged down over them). Since SEMANA is
+    // always deterministically derived from the day of month everywhere else in this base
+    // (SEMANA = day 1-7 → 1, 8-14 → 2, ... 29+ → 5), we recompute it from "dia" instead of
+    // silently dropping the row when the column itself is empty.
+    let week = weekNum(row[weekCol]);
+    if(week===null && isFinite(dayVal)) week = weekOfMonthDay(dayVal);
     rows.push({
       segment: normStr(row[regionalCol]),
       ym: parseDDMMYYYY(row[dataBaseCol]),
@@ -565,7 +572,7 @@ function parseFunilRows(aoa){
       lead: num(row[leadCol]),
       doc: docCol>=0 ? num(row[docCol]) : 0,
       cpf: cpfCol>=0 ? num(row[cpfCol]) : 0,
-      week: weekNum(row[weekCol]),
+      week: week,
     });
   }
   rows.__cpfLabel = cpfCol>=0 ? normStr(header[cpfCol]) : null;
@@ -598,13 +605,15 @@ function parseVendasRows(aoa){
     const row = aoa[r] || [];
     if(row[vendasCol]===null) continue;
     const dayVal = diaCol>=0 ? parseInt(normStr(row[diaCol]),10) : NaN;
+    let week = weekNum(row[weekCol]);
+    if(week===null && isFinite(dayVal)) week = weekOfMonthDay(dayVal);
     rows.push({
       segment: normStr(row[segCol]),
       ym: parsePtMonthYear(row[dataCol]),
       day: isFinite(dayVal) ? dayVal : null,
       city: cityCol>=0 ? (normStr(row[cityCol]) || null) : null,
       vendas: num(row[vendasCol]),
-      week: weekNum(row[weekCol]),
+      week: week,
     });
   }
   rows.__cityFound = cityCol>=0;
