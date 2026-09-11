@@ -312,7 +312,7 @@
 // ==========================================
 // CONFIGURAÇÃO DO ARQUIVO NO GITHUB
 // ==========================================
-const NOME_PLANILHA = 'base.xlsx'; // Mude aqui se o nome da planilha for diferente no repositório
+const NOME_PLANILHA = 'base.xlsx'; 
 
 const MESES_PT = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
 const MES_ABREV = {jan:1,fev:2,mar:3,abr:4,mai:5,jun:6,jul:7,ago:8,set:9,out:10,nov:11,dez:12};
@@ -355,13 +355,9 @@ const statusText = document.getElementById('statusText');
 const tabsEl = document.getElementById('tabs');
 const app = document.getElementById('app');
 
-// ==========================================
-// FUNÇÃO PARA BUSCAR O EXCEL DO GITHUB
-// ==========================================
 async function carregarBaseDoRepositorio() {
   setStatus(null, 'Baixando <strong>' + NOME_PLANILHA + '</strong> do repositório...');
   try {
-    // Adicionamos um timestamp (cache busting) para evitar que o navegador guarde uma versão velha em cache
     const response = await fetch(NOME_PLANILHA + '?t=' + new Date().getTime());
     
     if (!response.ok) {
@@ -378,10 +374,8 @@ async function carregarBaseDoRepositorio() {
   }
 }
 
-// Inicia o carregamento automático assim que a tela abre
 window.addEventListener('DOMContentLoaded', carregarBaseDoRepositorio);
 
-// Mantém a opção de upload manual como um plano B
 fileInput.addEventListener('change', (e)=>{
   const f = e.target.files[0];
   if(!f) return;
@@ -454,6 +448,28 @@ function weekNum(val){
 function num(v){
   const n = Number(v);
   return isFinite(n) ? n : 0;
+}
+
+// RACIONAL ESTRITO DAS SEMANAS:
+// Semana 1: 1 a 7 | Semana 2: 8 a 14 | Semana 3: 15 a 21 | Semana 4: 22 a 28 | Semana 5: 29+
+function weekOfMonthDay(d){
+  const day = Number(d);
+  if(!isFinite(day) || day <= 0) return null;
+  if(day <= 7) return 1;
+  if(day <= 14) return 2;
+  if(day <= 21) return 3;
+  if(day <= 28) return 4;
+  return 5;
+}
+
+function daysInMonth(y, m){
+  return new Date(y, m, 0).getDate();
+}
+function weekdayOf(y, m, d){
+  return new Date(y, m-1, d).getDay(); 
+}
+function monthKey(mo){
+  return mo.y+'-'+mo.m;
 }
 
 function buildMonthLookup(aoa){
@@ -550,20 +566,18 @@ function parseFunilRows(aoa){
   if(cpfCol<0) cpfCol = findColMatch(header, /cpf.*(aprv|aprovad)/i);
   const weekCol = findWeekColumn(header, aoa, headerRow);
 
-  if(regionalCol<0 || leadCol<0 || dataBaseCol<0 || weekCol<0) return [];
+  if(regionalCol<0 || leadCol<0 || dataBaseCol<0) return [];
 
   const rows = [];
   for(let r=headerRow+1; r<aoa.length; r++){
     const row = aoa[r] || [];
     if(row[leadCol]===null && (docCol<0 || row[docCol]===null) && (cpfCol<0 || row[cpfCol]===null)) continue;
     const dayVal = diaCol>=0 ? parseInt(normStr(row[diaCol]),10) : NaN;
-    // Some rows come with a blank "SEMANA" cell (seen e.g. when new city rows are appended
-    // to the base and that column's formula isn't dragged down over them). Since SEMANA is
-    // always deterministically derived from the day of month everywhere else in this base
-    // (SEMANA = day 1-7 → 1, 8-14 → 2, ... 29+ → 5), we recompute it from "dia" instead of
-    // silently dropping the row when the column itself is empty.
-    let week = weekNum(row[weekCol]);
-    if(week===null && isFinite(dayVal)) week = weekOfMonthDay(dayVal);
+    
+    // PRIORIDADE: Racional direto por 'dia'. Se ausente, cai para a coluna 'SEMANA'.
+    let week = isFinite(dayVal) ? weekOfMonthDay(dayVal) : null;
+    if(week===null && weekCol>=0) week = weekNum(row[weekCol]);
+
     rows.push({
       segment: normStr(row[regionalCol]),
       ym: parseDDMMYYYY(row[dataBaseCol]),
@@ -598,15 +612,18 @@ function parseVendasRows(aoa){
   const diaCol = findColExact(header, 'Dia');
   const weekCol = findWeekColumn(header, aoa, headerRow);
 
-  if(segCol<0 || dataCol<0 || vendasCol<0 || weekCol<0) return [];
+  if(segCol<0 || dataCol<0 || vendasCol<0) return [];
 
   const rows = [];
   for(let r=headerRow+1; r<aoa.length; r++){
     const row = aoa[r] || [];
     if(row[vendasCol]===null) continue;
     const dayVal = diaCol>=0 ? parseInt(normStr(row[diaCol]),10) : NaN;
-    let week = weekNum(row[weekCol]);
-    if(week===null && isFinite(dayVal)) week = weekOfMonthDay(dayVal);
+    
+    // PRIORIDADE: Racional direto por 'dia'. Se ausente, cai para a coluna 'SEMANA'.
+    let week = isFinite(dayVal) ? weekOfMonthDay(dayVal) : null;
+    if(week===null && weekCol>=0) week = weekNum(row[weekCol]);
+
     rows.push({
       segment: normStr(row[segCol]),
       ym: parsePtMonthYear(row[dataCol]),
@@ -794,18 +811,6 @@ function findUpdatedAt(wb){
   }
   return null;
 }
-function daysInMonth(y, m){
-  return new Date(y, m, 0).getDate();
-}
-function weekdayOf(y, m, d){
-  return new Date(y, m-1, d).getDay(); 
-}
-function weekOfMonthDay(d){
-  return Math.min(5, Math.floor((d-1)/7)+1);
-}
-function monthKey(mo){
-  return mo.y+'-'+mo.m;
-}
 
 function buildAvailableMonths(funilRows, vendasRows){
   const map = new Map();
@@ -854,8 +859,10 @@ function processWorkbook(wb, filename){
   }else{
     day = daysInMonth(curMonth.y, curMonth.m);
   }
-  const currentWeek = Math.min(5, Math.floor((day-1)/7)+1);
-  const elapsedDays = day - (currentWeek-1)*7;
+  
+  // Semana atual (1..5) e dias decorridos nela
+  const currentWeek = weekOfMonthDay(day);
+  const elapsedDays = day - (currentWeek - 1) * 7;
 
   const blockCodes = {};
   for(const b of BLOCKS){
@@ -938,12 +945,22 @@ function buildTable(block, mode, cityFilter){
           html += '<td class="'+curCls.trim()+'">'+fmtInt(abs)+'</td>';
         }else{
           let val;
+          const dim = mo.y ? daysInMonth(mo.y, mo.m) : 30;
+          const w5Days = Math.max(1, dim - 28); // Dias reais da Semana 5 daquele mês
+
           if(mi<3){
-            val = abs/7;
+            // Meses passados: semanas 1-4 dividem por 7, semana 5 pelos dias reais restantes
+            val = (w < 5) ? (abs / 7) : (abs / w5Days);
           }else{
-            if(w>STATE.currentWeek) val = null;
-            else if(w<STATE.currentWeek) val = abs/7;
-            else val = abs/STATE.elapsedDays;
+            // Mês atual em curso
+            if(w > STATE.currentWeek) {
+              val = null;
+            } else if(w < STATE.currentWeek) {
+              val = (w < 5) ? (abs / 7) : (abs / w5Days);
+            } else {
+              // Semana atual: divide pelos dias decorridos até a data de corte
+              val = STATE.elapsedDays > 0 ? (abs / STATE.elapsedDays) : abs;
+            }
           }
           const naCls = val===null ? ' na' : '';
           html += '<td class="'+(curCls+naCls).trim()+'">'+fmtRitmo(val)+'</td>';
