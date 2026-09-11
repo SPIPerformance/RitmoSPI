@@ -453,6 +453,28 @@ function weekOfMonthDay(d){
   return 5;
 }
 
+// Função Blindada que tenta pegar o dia direto da Data completa (fonte da verdade)
+// Se falhar ou estiver vazia, tenta pegar da coluna Dia
+function extractDayFromDateFirst(row, dateCol, diaCol) {
+  if (dateCol >= 0) {
+    const dVal = row[dateCol];
+    if (dVal instanceof Date) return dVal.getDate();
+    if (typeof dVal === 'string') {
+      const str = dVal.trim();
+      const m = str.match(/^(\d{1,2})\/\d{1,2}\/\d{4}/);
+      if (m) {
+         const v = parseInt(m[1], 10);
+         if (v > 0 && v <= 31) return v;
+      }
+    }
+  }
+  if (diaCol >= 0) {
+    const v = parseInt(normStr(row[diaCol]), 10);
+    if (isFinite(v) && v > 0 && v <= 31) return v;
+  }
+  return NaN;
+}
+
 function daysInMonth(y, m){
   return new Date(y, m, 0).getDate();
 }
@@ -495,7 +517,7 @@ function buildSegmentGroups(aoa){
   return groups;
 }
 
-// --- FUNIL: Isolado estritamente à esquerda (antes de IdOportunidade) ---
+// --- FUNIL: Isolado estritamente à esquerda ---
 function parseFunilRows(aoa){
   let headerRow = -1;
   let maxIdx = aoa[0] ? aoa[0].length : 1000;
@@ -506,7 +528,7 @@ function parseFunilRows(aoa){
     const hasRegional = row.some(c=>normStr(c).toLowerCase()==='regional');
     if(hasLead && hasRegional){ 
       headerRow = r; 
-      // Procura onde começam as vendas para criar a "parede" invisível
+      // Define a "parede" onde começam as vendas
       const idOpIdx = row.findIndex(c=>/idoportunidade/i.test(normStr(c)));
       if(idOpIdx > 0) maxIdx = idOpIdx;
       break; 
@@ -516,7 +538,7 @@ function parseFunilRows(aoa){
   const header = aoa[headerRow] || [];
 
   function searchCol(regex) {
-    for(let c=0; c<maxIdx; c++){ // Busca APENAS na parte do funil
+    for(let c=0; c<maxIdx; c++){ // Busca APENAS do lado do Funil
       if(header[c] !== undefined && regex.test(normStr(header[c]))) return c;
     }
     return -1;
@@ -540,24 +562,12 @@ function parseFunilRows(aoa){
     const row = aoa[r] || [];
     if(row[leadCol]===null && (docCol<0 || row[docCol]===null) && (cpfCol<0 || row[cpfCol]===null)) continue;
     
-    let dayVal = NaN;
-    if(diaCol >= 0){
-      dayVal = parseInt(normStr(row[diaCol]), 10);
-    }
-    if(!isFinite(dayVal) || dayVal <= 0){
-      const dVal = row[dataBaseCol];
-      if(dVal instanceof Date) dayVal = dVal.getDate();
-      else if(typeof dVal === 'string'){
-        const m = dVal.trim().match(/^(\d{1,2})\/\d{1,2}\/\d{4}/);
-        if(m) dayVal = parseInt(m[1], 10);
-      }
-    }
+    const dayVal = extractDayFromDateFirst(row, dataBaseCol, diaCol);
     
     let week = isFinite(dayVal) ? weekOfMonthDay(dayVal) : null;
     if(week===null && weekCol>=0) {
        week = weekNum(row[weekCol]);
     }
-    if(week===null && isFinite(dayVal)) week = weekOfMonthDay(dayVal);
 
     rows.push({
       segment: normStr(row[regionalCol]),
@@ -575,7 +585,7 @@ function parseFunilRows(aoa){
   return rows;
 }
 
-// --- VENDAS: Isolado estritamente à direita (após IdOportunidade) ---
+// --- VENDAS: Isolado estritamente à direita ---
 function parseVendasRows(aoa){
   let headerRow = -1;
   let startIdx = 0;
@@ -585,7 +595,7 @@ function parseVendasRows(aoa){
     const idx = row.findIndex(c=>/idoportunidade/i.test(normStr(c)));
     if(idx >= 0){ 
       headerRow = r; 
-      startIdx = idx; // Parede invisível: só olha daqui para frente
+      startIdx = idx; // Parede invisível: ignora TUDO que for do Funil
       break; 
     }
   }
@@ -593,7 +603,7 @@ function parseVendasRows(aoa){
   const header = aoa[headerRow] || [];
 
   function searchCol(regex) {
-    for(let c=startIdx; c<header.length; c++){ // Busca APENAS na parte de vendas
+    for(let c=startIdx; c<header.length; c++){ // Busca APENAS do lado das Vendas
       if(header[c] !== undefined && regex.test(normStr(header[c]))) return c;
     }
     return -1;
@@ -603,7 +613,7 @@ function parseVendasRows(aoa){
   const cityCol = searchCol(/cidade/i);
   let dataCol = searchCol(/DataBaseAssinaturaContratoSalesforce/i);
   if(dataCol<0) dataCol = searchCol(/assinaturacontrato/i);
-  if(dataCol<0) dataCol = searchCol(/data/i); // fallback
+  if(dataCol<0) dataCol = searchCol(/^data$/i); // fallback
 
   let vendasCol = searchCol(/^#\s*Vendas$/i);
   if(vendasCol<0) vendasCol = searchCol(/vendas/i);
@@ -618,19 +628,8 @@ function parseVendasRows(aoa){
     const row = aoa[r] || [];
     if(row[vendasCol]===null || row[vendasCol]===undefined || row[vendasCol]==='') continue;
     
-    let dayVal = NaN;
-    if(diaCol >= 0){
-      dayVal = parseInt(normStr(row[diaCol]), 10);
-    }
-    // Se a coluna de dia falhar, arrancamos da DATA DE ASSINATURA DA VENDA (100% blindado)
-    if(!isFinite(dayVal) || dayVal <= 0){
-      const dVal = row[dataCol];
-      if(dVal instanceof Date) dayVal = dVal.getDate();
-      else if(typeof dVal === 'string'){
-        const m = dVal.trim().match(/^(\d{1,2})\/\d{1,2}\/\d{4}/);
-        if(m) dayVal = parseInt(m[1], 10);
-      }
-    }
+    // Tenta arrancar o dia da Data de Assinatura primeiro. Assim não pega 'Dia' errado.
+    const dayVal = extractDayFromDateFirst(row, dataCol, diaCol);
     
     let week = isFinite(dayVal) ? weekOfMonthDay(dayVal) : null;
     if(week===null && weekCol>=0) {
