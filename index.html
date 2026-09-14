@@ -340,7 +340,7 @@ const REGIONAL_CITIES = {
   spi2: ['RIBEIRÃO PRETO','FRANCA'],
   spi3: ['PIRACICABA','LIMEIRA','SÃO CARLOS',"SANTA BÁRBARA D'OESTE",'AMERICANA'],
   spi4: ['PRESIDENTE PRUDENTE','BOTUCATU','BAURU','MARÍLIA','ARARAQUARA'],
-  spi5: ['SÃO JOSÉ DO RIO PRETO','ARAÇATUBA'],
+  spi5: ['SÃO JOSÉ DO RIO PRETO','ARAÇATUBA','CATANDUVA','MIRASSOL'],
   spi6: ['SOROCABA','JUNDIAÍ','VOTORANTIM','ITÚ','ARARAS','SALTO'],
 };
 
@@ -716,13 +716,30 @@ function buildCityList(funilRows, vendasRows, codes){
   for(const r of vendasRows){ if(r.city && matchSeg(r.segment)) set.add(r.city); }
   return Array.from(set).sort((a,b)=>a.localeCompare(b,'pt-BR'));
 }
-
-function resolveCityList(blockKey, funilRows, vendasRows, codes){
+function prevCalendarMonth(mo){
+  return mo.m===1 ? {y:mo.y-1, m:12} : {y:mo.y, m:mo.m-1};
+}
+// A city tab only earns its place if it actually had Lead activity in the current month
+// or the immediately preceding calendar month — otherwise it's dead weight in the nav.
+// This checks the true previous month (derived from "mês atual"), not whatever the
+// person currently has picked in the "Mês -1" comparison dropdown.
+function cityHadRecentLeads(city, funilRows, codes, currentMonth, prevMonth){
+  const matchSeg = (seg)=> codes===null || codes.includes(seg);
+  const target = normCity(city);
+  for(const r of funilRows){
+    if(!r.ym || !r.lead || !matchSeg(r.segment) || normCity(r.city)!==target) continue;
+    if((r.ym.y===currentMonth.y && r.ym.m===currentMonth.m) || (r.ym.y===prevMonth.y && r.ym.m===prevMonth.m)){
+      return true;
+    }
+  }
+  return false;
+}
+function resolveCityList(blockKey, funilRows, vendasRows, codes, months){
   const official = REGIONAL_CITIES[blockKey] || [];
-  const dataCities = buildCityList(funilRows, vendasRows, codes);
-  const officialSet = new Set(official.map(normCity));
-  const extra = dataCities.filter(c => !officialSet.has(normCity(c)));
-  return official.concat(extra);
+  if(!months) return official;
+  const currentMonth = months[3];
+  const prevMonth = prevCalendarMonth(currentMonth);
+  return official.filter(city => cityHadRecentLeads(city, funilRows, codes, currentMonth, prevMonth));
 }
 
 function computeProjection(blockKey, cityFilter){
@@ -1078,7 +1095,7 @@ function renderBlock(key){
   if(!STATE || !block) return;
 
   const isRegional = block.group !== null; 
-  const cityList = isRegional ? resolveCityList(block.key, STATE.funilRows, STATE.vendasRows, STATE.blockCodes[block.key]) : [];
+  const cityList = isRegional ? resolveCityList(block.key, STATE.funilRows, STATE.vendasRows, STATE.blockCodes[block.key], STATE.months) : [];
   const cityFilter = isRegional ? activeCity : null;
 
   let html = '';
