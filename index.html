@@ -344,6 +344,12 @@ const REGIONAL_CITIES = {
   spi6: ['SOROCABA','JUNDIAÍ','VOTORANTIM','ITÚ','ARARAS','SALTO'],
 };
 
+// Cities listed here always show as a tab, even with zero leads in the current or
+// previous month — an explicit exception to the "hide if inactive" rule below.
+const ALWAYS_SHOW_CITIES = {
+  spi2: ['FRANCA'],
+};
+
 let STATE = null; 
 let activeBlock = 'total';
 let activeCity = null;
@@ -737,9 +743,12 @@ function cityHadRecentLeads(city, funilRows, codes, currentMonth, prevMonth){
 function resolveCityList(blockKey, funilRows, vendasRows, codes, months){
   const official = REGIONAL_CITIES[blockKey] || [];
   if(!months) return official;
+  const alwaysShow = new Set((ALWAYS_SHOW_CITIES[blockKey] || []).map(normCity));
   const currentMonth = months[3];
   const prevMonth = prevCalendarMonth(currentMonth);
-  return official.filter(city => cityHadRecentLeads(city, funilRows, codes, currentMonth, prevMonth));
+  return official.filter(city =>
+    alwaysShow.has(normCity(city)) || cityHadRecentLeads(city, funilRows, codes, currentMonth, prevMonth)
+  );
 }
 
 function computeProjection(blockKey, cityFilter){
