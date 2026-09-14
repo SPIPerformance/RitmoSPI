@@ -997,9 +997,9 @@ function buildTable(block, mode, cityFilter){
       months.forEach((mo,mi)=>{
         const cell = data[mi][w];
         const abs = cell ? cell[st.key] : 0;
+        totals[st.key][mi] += abs;
         const curCls = mi===3 ? ' current-col' : '';
         if(mode==='abs'){
-          totals[st.key][mi] += abs;
           html += '<td class="'+curCls.trim()+'">'+fmtInt(abs)+'</td>';
         }else{
           let val;
@@ -1031,6 +1031,21 @@ function buildTable(block, mode, cityFilter){
       months.forEach((mo,mi)=>{
         const curCls = mi===3 ? ' current-col' : '';
         html += '<td class="'+curCls.trim()+'">'+fmtInt(totals[st.key][mi])+'</td>';
+      });
+    }
+    html += '</tr>';
+  }else{
+    // Média do mês: progresso total acumulado da etapa dividido pelos dias — dias já
+    // decorridos no mês atual (ex.: 160 no dia 16 dá ritmo 10), ou todos os dias do mês
+    // para os meses já encerrados. Diferente das linhas de Semana, que mostram o ritmo
+    // dentro de cada semana isoladamente, esta é uma média única do mês inteiro.
+    html += '<tr class="total-row avg-row"><td class="rowlabel">Média do mês</td>';
+    for(const st of STAGES){
+      months.forEach((mo,mi)=>{
+        const curCls = mi===3 ? ' current-col' : '';
+        const divisor = mi===3 ? STATE.day : (mo.y ? daysInMonth(mo.y, mo.m) : 30);
+        const val = divisor>0 ? totals[st.key][mi]/divisor : null;
+        html += '<td class="'+curCls.trim()+'">'+fmtRitmo(val)+'</td>';
       });
     }
     html += '</tr>';
