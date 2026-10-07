@@ -335,6 +335,11 @@ const BLOCKS = [
   {key:'sensia', title:'Sensia SPI',  group:'SENSIA SPI'},
 ];
 
+// A Diretoria é formada exclusivamente por SPI 1 a SPI 6 + Sensia SPI.
+// Sensia SPI, por sua vez, reúne as regionais Sensia CP e Sensia RP.
+const DIRECTORATE_GROUPS = ['SPI 1','SPI 2','SPI 3','SPI 4','SPI 5','SPI 6','SENSIA SPI'];
+const SENSIA_FALLBACK_CODES = ['Sensia CP','Sensia RP','SENSIA CP','SENSIA RP'];
+
 const REGIONAL_CITIES = {
   spi1: ['CAMPINAS','PAULÍNIA'],
   spi2: ['RIBEIRÃO PRETO','FRANCA'],
@@ -539,6 +544,24 @@ function buildSegmentGroups(aoa){
     if(!groups[g].includes(d)) groups[g].push(d);
   }
   return groups;
+}
+
+function buildDirectorateCodes(segmentGroups){
+  const codes = new Set();
+  for(const groupName of DIRECTORATE_GROUPS){
+    for(const code of (segmentGroups[groupName] || [])){
+      if(code) codes.add(code);
+    }
+  }
+
+  // Garante que Sensia CP e Sensia RP sejam considerados mesmo se a aba divsemana
+  // vier sem o agrupamento "SENSIA SPI" em alguma atualização da base.
+  const sensiaMapped = segmentGroups['SENSIA SPI'] || [];
+  if(sensiaMapped.length===0){
+    for(const code of SENSIA_FALLBACK_CODES) codes.add(code);
+  }
+
+  return Array.from(codes);
 }
 
 function findCityColumn(headerRowArr){
@@ -924,7 +947,13 @@ function processWorkbook(wb, filename){
 
   const blockCodes = {};
   for(const b of BLOCKS){
-    blockCodes[b.key] = b.group===null ? null : (segmentGroups[b.group] || []);
+    // O Total Geral não deve significar "todas as regionais da planilha".
+    // Ele representa a Diretoria: SPI 1–6 + Sensia SPI (Sensia CP + Sensia RP).
+    if(b.key==='total'){
+      blockCodes[b.key] = buildDirectorateCodes(segmentGroups);
+    }else{
+      blockCodes[b.key] = segmentGroups[b.group] || [];
+    }
   }
 
   const availableMonths = buildAvailableMonths(funilRows, vendasRows);
