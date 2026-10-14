@@ -116,6 +116,16 @@
   .flow .stage .dot{width:8px; height:8px; border-radius:50%;}
   .flow .arrow{color:var(--muted2); font-size:14px;}
 
+  .top-row{display:flex; justify-content:space-between; align-items:flex-start; gap:20px; margin-bottom:14px;}
+  .top-left{flex:1; min-width:0;}
+  table.week-legend{
+    flex:0 0 auto; width:auto; min-width:0; border-collapse:collapse; font-size:11.5px;
+    background:var(--card); border:1px solid var(--border);
+  }
+  table.week-legend td{
+    border:1px solid var(--border); padding:4px 12px; text-align:center; white-space:nowrap; color:var(--text);
+  }
+  table.week-legend td:first-child{font-weight:600; color:var(--muted);}
   .block-title{display:flex; align-items:baseline; gap:12px; margin-bottom:4px; flex-wrap:wrap;}
   .block-title h2{font-size:20px; margin:0;}
   .block-title .sub{color:var(--muted); font-size:13px;}
@@ -252,6 +262,8 @@
     .flow .stage{padding:5px 10px; font-size:11px; gap:5px;}
     .flow .arrow{display:none;}
 
+    .top-row{flex-direction:column; gap:10px; margin-bottom:12px;}
+    table.week-legend{align-self:flex-start; min-width:0;}
     .block-title{gap:8px;}
     .block-title h2{font-size:17px;}
     .block-title #projBtn{width:100%; order:3;}
@@ -290,8 +302,6 @@
     <div id="uploadBox" class="upload-box">
       <div class="status-dot"></div>
       <div class="status-text" id="statusText">Aguardando...</div>
-      <label class="btn" for="fileInput">Carregar base manual (.xlsx)</label>
-      <input type="file" id="fileInput" accept=".xlsx,.xlsm">
     </div>
   </div>
 </header>
@@ -354,7 +364,6 @@ let STATE = null;
 let activeBlock = 'total';
 let activeCity = null;
 
-const fileInput = document.getElementById('fileInput');
 const uploadBox = document.getElementById('uploadBox');
 const statusText = document.getElementById('statusText');
 const tabsEl = document.getElementById('tabs');
@@ -376,12 +385,6 @@ async function carregarBaseDoRepositorio() {
 }
 
 window.addEventListener('DOMContentLoaded', carregarBaseDoRepositorio);
-
-fileInput.addEventListener('change', (e)=>{
-  const f = e.target.files[0];
-  if(!f) return;
-  handleFile(f);
-});
 
 function setStatus(kind, html){
   uploadBox.classList.remove('ok','err');
@@ -1103,6 +1106,13 @@ function renderProjectionTable(proj){
   return html;
 }
 
+function renderWeekLegend(){
+  const rows = [['SEMANA 1','1 a 7'],['SEMANA 2','8 a 14'],['SEMANA 3','15 a 21'],['SEMANA 4','22 a 28'],['SEMANA 5','29 a 31']];
+  let h = '<table class="week-legend"><tbody>';
+  for(const r of rows) h += '<tr><td>'+r[0]+'</td><td>'+r[1]+'</td></tr>';
+  return h + '</tbody></table>';
+}
+
 function renderCityTabs(block, cityList){
   let html = '<div class="city-tabs">';
   html += '<span class="mc-label">Ver por:</span>';
@@ -1123,6 +1133,7 @@ function renderBlock(key){
   const cityFilter = isRegional ? activeCity : null;
 
   let html = '';
+  html += '<div class="top-row"><div class="top-left">';
   html += '<div class="flow">';
   const flowColors = {lead:'var(--lead)', doc:'var(--doc)', cpf:'var(--cpf)', vendas:'var(--vendas)'};
   STAGES.forEach((st,i)=>{
@@ -1133,6 +1144,7 @@ function renderBlock(key){
 
   const titleSuffix = cityFilter ? ' — '+escapeHtml(cityFilter) : '';
   html += '<div class="block-title"><h2>'+block.title+titleSuffix+'</h2><button class="btn-outline" id="projBtn">Projetar fechamento do mês</button></div>';
+  html += '</div>' + renderWeekLegend() + '</div>';
 
   if(isRegional){
     if(cityList.length){
